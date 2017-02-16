@@ -17,7 +17,6 @@
  */
 
 #include "dcvl/util/NetConnector.h"
-#include "logging/Logging.h"
 
 #include <iostream>
 

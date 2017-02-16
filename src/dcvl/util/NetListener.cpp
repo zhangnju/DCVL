@@ -17,7 +17,6 @@
  */
 
 #include "dcvl/util/NetListener.h"
-#include "logging/Logging.h"
 
 #include <iostream>
 #include <thread>

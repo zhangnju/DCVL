@@ -19,7 +19,6 @@
 #include "dcvl/service/Manager.h"
 #include "dcvl/util/Configuration.h"
 #include "dcvl/base/Constants.h"
-#include "logging/Logging.h"
 
 #include <iostream>
 #include <string>
