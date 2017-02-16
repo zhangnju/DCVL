@@ -17,13 +17,10 @@
  */
 
 #pragma once
-
-#include "logging/Logging.h"
-
 #ifdef WIN32
 #include <Ws2tcpip.h>
-
-
+#include <iostream>
+#define LOG(LOG_ERROR) std::cout
 #define DISPLAY_SOCKET_ERROR(message) \
     LOG(LOG_ERROR) << message << WSAGetLastError()
 #else

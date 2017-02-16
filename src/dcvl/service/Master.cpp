@@ -5,7 +5,6 @@
 #include "dcvl/topology/Topology.h"
 #include "dcvl/topology/TopologyLoader.h"
 #include "dcvl/base/Constants.h"
-#include "logging/Logging.h"
 
 #include <iostream>
 #include <thread>

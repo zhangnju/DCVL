@@ -18,7 +18,6 @@
 
 #include "dcvl/message/Command.h"
 #include "dcvl/base/DataPackage.h"
-#include "logging/Logging.h"
 
 #include <iostream>
 

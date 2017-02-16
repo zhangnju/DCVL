@@ -20,7 +20,6 @@
 #include "dcvl/message/Command.h"
 #include "dcvl/util/NetConnector.h"
 #include "dcvl/base/ByteArray.h"
-#include "logging/Logging.h"
 
 #include <iostream>
 

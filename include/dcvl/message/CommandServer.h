@@ -3,7 +3,6 @@
 #include "dcvl/util/NetListener.h"
 #include "dcvl/message/Command.h"
 #include "dcvl/base/ByteArray.h"
-#include "logging/Logging.h"
 
 #include <functional>
 #include <cstdint>

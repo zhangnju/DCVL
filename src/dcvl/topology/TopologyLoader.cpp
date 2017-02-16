@@ -18,7 +18,6 @@
 
 #include "dcvl/topology/TopologyLoader.h"
 #include "dcvl/base/Library.h"
-#include "logging/Logging.h"
 
 namespace dcvl {
     namespace topology {
@@ -32,10 +31,10 @@ namespace dcvl {
 
         std::shared_ptr<Topology> TopologyLoader::GetTopology(const std::string& topologyName) {
             if ( _libraryHandles.find(topologyName) == _libraryHandles.end() ) {
-                LibraryHandle libraryHandle = HurricaneLibraryLoad(topologyName);
+                LibraryHandle libraryHandle = DCVLLibraryLoad(topologyName);
                 _libraryHandles[topologyName] = libraryHandle;
                 TopologyGetter topologyGetter =
-                    HurricaneLibraryGetSymbol<TopologyGetter>(libraryHandle, GET_TOPOLOGY_INTERFACE);
+                    DCVLLibraryGetSymbol<TopologyGetter>(libraryHandle, GET_TOPOLOGY_INTERFACE);
 
                 _topologies[topologyName].reset(topologyGetter());
             }

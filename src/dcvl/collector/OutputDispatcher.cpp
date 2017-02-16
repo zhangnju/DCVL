@@ -23,7 +23,6 @@
 #include "dcvl/message/CommandClient.h"
 #include "dcvl/message/Command.h"
 #include "dcvl/util/NetConnector.h"
-#include "logging/Logging.h"
 
 namespace dcvl {
 namespace collector {

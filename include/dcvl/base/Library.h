@@ -17,9 +17,6 @@
  */
 
 #pragma once
-
-#include "logging/Logging.h"
-
 #include <string>
 #include <iostream>
 

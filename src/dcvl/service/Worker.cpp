@@ -30,7 +30,6 @@
 #include "dcvl/collector/OutputQueue.h"
 #include "dcvl/collector/TaskQueue.h"
 #include "dcvl/base/Constants.h"
-#include "logging/Logging.h"
 
 namespace dcvl {
     namespace service {

@@ -27,8 +27,7 @@
 #include <algorithm>
 #include <list>
 
-#include "logging/Logging.h"
-
+#define LOG(LOG_ERROR) std::cout 
 #define VARIANT_GETTER(TypeName, CType, valueName) \
     CType Get##TypeName##Value() const { \
         if ( _type == Type::Invalid ) { \
