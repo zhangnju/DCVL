@@ -16,7 +16,7 @@
  * limitations under the license.
  */
 
-#include "dcvl/service/Manager.h"
+#include "dcvl/service/Worker.h"
 #include "dcvl/message/CommandClient.h"
 #include "dcvl/util/NetConnector.h"
 #include "dcvl/util/Configuration.h"
@@ -34,36 +34,36 @@
 namespace dcvl {
     namespace service {
 
-    Manager::Manager(const dcvl::util::Configuration& configuration) :
+    Worker::Worker(const dcvl::util::Configuration& configuration) :
             CommandServer(new dcvl::util::NetListener(dcvl::base::NetAddress(
-                    configuration.GetProperty(ConfigurationKey::ManagerHost),
-                    configuration.GetIntegerProperty(ConfigurationKey::ManagerPort)))),
-            _host(configuration.GetProperty(ConfigurationKey::ManagerHost)),
-            _port(configuration.GetIntegerProperty(ConfigurationKey::ManagerPort)) {
-        _managerConfiguration.reset(new dcvl::util::Configuration(configuration));
-        _name = configuration.GetProperty(ConfigurationKey::ManagerName);
+                    configuration.GetProperty(ConfigurationKey::WorkerHost),
+                    configuration.GetIntegerProperty(ConfigurationKey::WorkerPort)))),
+            _host(configuration.GetProperty(ConfigurationKey::WorkerHost)),
+            _port(configuration.GetIntegerProperty(ConfigurationKey::WorkerPort)) {
+        _WorkerConfiguration.reset(new dcvl::util::Configuration(configuration));
+        _name = configuration.GetProperty(ConfigurationKey::WorkerName);
 
-        InitPresidentConnector();
+        InitMasterConnector();
         InitSelfContext();
         ReserveExecutors();
         InitEvents();
     }
 
-    void Manager::InitPresidentConnector()
+    void Worker::InitMasterConnector()
     {
-        dcvl::base::NetAddress presidentAddress(_managerConfiguration->GetProperty(ConfigurationKey::PresidentPort),
-            _managerConfiguration->GetIntegerProperty(ConfigurationKey::PresidentPort));
-        _presidentConnector = new dcvl::util::NetConnector(presidentAddress);
-        _presidentClient = new dcvl::message::CommandClient(_presidentConnector);
+        dcvl::base::NetAddress MasterAddress(_WorkerConfiguration->GetProperty(ConfigurationKey::MasterPort),
+            _WorkerConfiguration->GetIntegerProperty(ConfigurationKey::MasterPort));
+        _MasterConnector = new dcvl::util::NetConnector(MasterAddress);
+        _MasterClient = new dcvl::message::CommandClient(_MasterConnector);
     }
 
-    void Manager::ReserveExecutors()
+    void Worker::ReserveExecutors()
     {
-        _spoutExecutors.resize(_managerConfiguration->GetIntegerProperty(ConfigurationKey::SpoutCount));
-        _boltExecutors.resize(_managerConfiguration->GetIntegerProperty(ConfigurationKey::BoltCount));
-        _spoutCollectors.resize(_managerConfiguration->GetIntegerProperty(ConfigurationKey::SpoutCount));
-        _boltCollectors.resize(_managerConfiguration->GetIntegerProperty(ConfigurationKey::BoltCount));
-        _boltTaskQueues.resize(_managerConfiguration->GetIntegerProperty(ConfigurationKey::BoltCount));
+        _spoutExecutors.resize(_WorkerConfiguration->GetIntegerProperty(ConfigurationKey::SpoutCount));
+        _boltExecutors.resize(_WorkerConfiguration->GetIntegerProperty(ConfigurationKey::BoltCount));
+        _spoutCollectors.resize(_WorkerConfiguration->GetIntegerProperty(ConfigurationKey::SpoutCount));
+        _boltCollectors.resize(_WorkerConfiguration->GetIntegerProperty(ConfigurationKey::BoltCount));
+        _boltTaskQueues.resize(_WorkerConfiguration->GetIntegerProperty(ConfigurationKey::BoltCount));
 
         for ( auto& boltTask : _boltTaskQueues ) {
             boltTask.reset(new collector::TaskQueue);
@@ -75,24 +75,24 @@ namespace dcvl {
         _outputDispatcher.SetSelfTasks(_boltTaskQueues);
         _outputDispatcher.SetSelfSpoutCount(static_cast<int32_t>(_spoutExecutors.size()));
 
-        dcvl::base::NetAddress presidentAddress(_managerConfiguration->GetProperty(ConfigurationKey::PresidentHost),
-            _managerConfiguration->GetIntegerProperty(ConfigurationKey::PresidentPort));
-        _presidentConnector = new dcvl::util::NetConnector(presidentAddress);
-        _presidentClient = new dcvl::message::CommandClient(_presidentConnector);
-        _outputDispatcher.SetPresidentClient(_presidentClient);
+        dcvl::base::NetAddress MasterAddress(_WorkerConfiguration->GetProperty(ConfigurationKey::MasterHost),
+            _WorkerConfiguration->GetIntegerProperty(ConfigurationKey::MasterPort));
+        _MasterConnector = new dcvl::util::NetConnector(MasterAddress);
+        _MasterClient = new dcvl::message::CommandClient(_MasterConnector);
+        _outputDispatcher.SetMasterClient(_MasterClient);
 
         _outputDispatcher.Start();
     }
 
-    void Manager::InitEvents()
+    void Worker::InitEvents()
     {
-        OnConnection(std::bind(&Manager::OnConnect, this, std::placeholders::_1));
-        OnCommand(dcvl::message::Command::Type::Heartbeat, this, &Manager::OnHeartbeat);
-        OnCommand(dcvl::message::Command::Type::SyncMetadata, this, &Manager::OnSyncMetadata);
-        OnCommand(dcvl::message::Command::Type::SendTuple, this, &Manager::OnSendTuple);
+        OnConnection(std::bind(&Worker::OnConnect, this, std::placeholders::_1));
+        OnCommand(dcvl::message::Command::Type::Heartbeat, this, &Worker::OnHeartbeat);
+        OnCommand(dcvl::message::Command::Type::SyncMetadata, this, &Worker::OnSyncMetadata);
+        OnCommand(dcvl::message::Command::Type::SendTuple, this, &Worker::OnSendTuple);
     }
 
-    void Manager::InitTaskFieldsMap()
+    void Worker::InitTaskFieldsMap()
     {
         const std::map<std::string, dcvl::spout::SpoutDeclarer>& spoutDeclarers =
                 _topology->GetSpoutDeclarers();
@@ -116,15 +116,15 @@ namespace dcvl {
         _outputDispatcher.SetTaskFieldsMap(_taskFieldsMap);
     }
 
-    void Manager::OnConnect(ManagerContext* context) {
+    void Worker::OnConnect(WorkerContext* context) {
     }
 
-    void Manager::JoinPresident(JoinPresidentCallback callback) {
-        dcvl::message::CommandClient* commandClient = _presidentClient;
+    void Worker::JoinMaster(JoinMasterCallback callback) {
+        dcvl::message::CommandClient* commandClient = _MasterClient;
 
-        _presidentConnector->Connect([commandClient, callback, this](const util::SocketError&) {
+        _MasterConnector->Connect([commandClient, callback, this](const util::SocketError&) {
             dcvl::message::Command command(dcvl::message::Command::Type::Join);
-            command.AddArgument({ NodeType::Manager });
+            command.AddArgument({ NodeType::Worker });
             command.AddArgument({ this->_host });
             command.AddArgument({ this->_port });
             std::vector<dcvl::base::Variant> context;
@@ -143,7 +143,7 @@ namespace dcvl {
         });
     }
 
-    void Manager::OnHeartbeat(ManagerContext* context, const message::Command& command,
+    void Worker::OnHeartbeat(WorkerContext* context, const message::Command& command,
         dcvl::message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor)
     {
         dcvl::message::Response response(dcvl::message::Response::Status::Successful);
@@ -152,7 +152,7 @@ namespace dcvl {
         Responsor(response);
     }
 
-    void Manager::OnSyncMetadata(ManagerContext* context, const message::Command& command,
+    void Worker::OnSyncMetadata(WorkerContext* context, const message::Command& command,
         message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor)
     {
         const std::vector<dcvl::base::Variant>& arguments = command.GetArguments();
@@ -169,13 +169,13 @@ namespace dcvl {
         base::Variants::const_iterator currentIterator = arguments.cbegin() + 1;
         _selfContext->Deserialize(currentIterator);
 
-        OwnManagerTasks();
+        OwnWorkerTasks();
         _outputDispatcher.SetTaskInfos(_selfContext->GetTaskInfos());
 
-        ShowManagerMetadata();
+        ShowWorkerMetadata();
         ShowTaskInfos();
 
-        std::string topologyName = _managerConfiguration->GetProperty(ConfigurationKey::TopologyName);
+        std::string topologyName = _WorkerConfiguration->GetProperty(ConfigurationKey::TopologyName);
         _topology = dcvl::topology::TopologyLoader::GetInstance().GetTopology(topologyName);
 
         InitTaskFieldsMap();
@@ -184,7 +184,7 @@ namespace dcvl {
         Responsor(response);
     }
 
-    void Manager::OnSendTuple(ManagerContext* context, const message::Command& command,
+    void Worker::OnSendTuple(WorkerContext* context, const message::Command& command,
                                  message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor)
     {
         const base::Variants& arguments = command.GetArguments();
@@ -213,11 +213,11 @@ namespace dcvl {
         Responsor(response);
     }
 
-    void Manager::InitSelfContext() {
-        this->_selfContext.reset(new ManagerContext);
+    void Worker::InitSelfContext() {
+        this->_selfContext.reset(new WorkerContext);
         _selfContext->SetId(_name);
-        _selfContext->SetSpoutCount(_managerConfiguration->GetIntegerProperty(ConfigurationKey::SpoutCount));
-        _selfContext->SetBoltCount(_managerConfiguration->GetIntegerProperty(ConfigurationKey::BoltCount));
+        _selfContext->SetSpoutCount(_WorkerConfiguration->GetIntegerProperty(ConfigurationKey::SpoutCount));
+        _selfContext->SetBoltCount(_WorkerConfiguration->GetIntegerProperty(ConfigurationKey::BoltCount));
         _selfContext->SetTaskInfos(std::vector<dcvl::task::TaskInfo>(_selfContext->GetSpoutCount() + _selfContext->GetBoltCount()));
 
         std::set<int32_t> freeSpouts;
@@ -235,7 +235,7 @@ namespace dcvl {
         _selfContext->SetFreeBolts(freeBolts);
     }
 
-    void Manager::InitSpoutExecutors()
+    void Worker::InitSpoutExecutors()
     {
         LOG(LOG_DEBUG) << "Init spout executors";
         const std::map<std::string, dcvl::spout::SpoutDeclarer>& spoutDeclarers =
@@ -256,13 +256,13 @@ namespace dcvl {
 
             std::shared_ptr<task::SpoutExecutor> spoutExecutor(new task::SpoutExecutor);
             spoutExecutor->SetSpout(spout);
-            int32_t flowParam = _managerConfiguration->GetIntegerProperty(ConfigurationKey::SpoutFlowParam);
+            int32_t flowParam = _WorkerConfiguration->GetIntegerProperty(ConfigurationKey::SpoutFlowParam);
             spoutExecutor->SetFlowParam(flowParam);
             _spoutExecutors[spoutIndex] = spoutExecutor;
         }
     }
 
-    void Manager::InitBoltExecutors()
+    void Worker::InitBoltExecutors()
     {
         LOG(LOG_DEBUG) << "Init bolt executors";
         const std::map<std::string, dcvl::bolt::BoltDeclarer>& boltDeclarers =
@@ -291,7 +291,7 @@ namespace dcvl {
         }
     }
 
-    void Manager::InitExecutors()
+    void Worker::InitExecutors()
     {
         InitSpoutExecutors();
         InitBoltExecutors();
@@ -308,17 +308,17 @@ namespace dcvl {
         }
     }
 
-    void Manager::OwnManagerTasks()
+    void Worker::OwnWorkerTasks()
     {
         std::vector<dcvl::task::TaskInfo>& taskInfos = _selfContext->GetTaskInfos();
         for ( dcvl::task::TaskInfo& taskInfo : taskInfos ) {
-            taskInfo.SetManagerContext(_selfContext.get());
+            taskInfo.SetWorkerContext(_selfContext.get());
         }
     }
 
-    void Manager::ShowManagerMetadata()
+    void Worker::ShowWorkerMetadata()
     {
-        LOG(LOG_DEBUG) << "Manager name: " << _selfContext->GetId();
+        LOG(LOG_DEBUG) << "Worker name: " << _selfContext->GetId();
         LOG(LOG_DEBUG) << "  Spout count: " << _selfContext->GetSpoutCount();
         LOG(LOG_DEBUG) << "  Bolt count: " << _selfContext->GetBoltCount();
         LOG(LOG_DEBUG) << "  Task info count: " << _selfContext->GetTaskInfos().size();
@@ -328,15 +328,15 @@ namespace dcvl {
         LOG(LOG_DEBUG) << "  Busy bolt count: " << _selfContext->GetBusyBolts().size();
     }
 
-    void Manager::ShowTaskInfos()
+    void Worker::ShowTaskInfos()
     {
         const std::vector<dcvl::task::TaskInfo>& taskInfos = _selfContext->GetTaskInfos();
         for ( const dcvl::task::TaskInfo& taskInfo : taskInfos ) {
-            if ( !taskInfo.GetManagerContext() ) {
+            if ( !taskInfo.GetWorkerContext() ) {
                 continue;
             }
 
-            LOG(LOG_DEBUG) << "    Manager: " << taskInfo.GetManagerContext()->GetId();
+            LOG(LOG_DEBUG) << "    Worker: " << taskInfo.GetWorkerContext()->GetId();
             LOG(LOG_DEBUG) << "    Exectuor index: " << taskInfo.GetExecutorIndex();
             LOG(LOG_DEBUG) << "    Task name: " << taskInfo.GetTaskName();
             LOG(LOG_DEBUG) << "    Paths: ";
@@ -349,9 +349,9 @@ namespace dcvl {
 
                 if ( path.GetGroupMethod() == dcvl::task::PathInfo::GroupMethod::Global) {
                     LOG(LOG_DEBUG) << "        Destination host: " <<
-                                 path.GetDestinationExecutors()[0].GetManager().GetHost();
+                                 path.GetDestinationExecutors()[0].GetWorker().GetHost();
                     LOG(LOG_DEBUG) << "        Destination port: " <<
-                                 path.GetDestinationExecutors()[0].GetManager().GetPort();
+                                 path.GetDestinationExecutors()[0].GetWorker().GetPort();
                     LOG(LOG_DEBUG) << "        Destination executor index: " <<
                                  path.GetDestinationExecutors()[0].GetExecutorIndex();
                 }

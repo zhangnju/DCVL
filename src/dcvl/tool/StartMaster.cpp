@@ -16,7 +16,7 @@
  * limitations under the license.
  */
 
-#include "dcvl/service/President.h"
+#include "dcvl/service/Master.h"
 #include "dcvl/util/Configuration.h"
 
 #include <iostream>
@@ -24,7 +24,7 @@
 
 using namespace std;
 
-void StartPresident(const std::string& configFileName);
+void StartMaster(const std::string& configFileName);
 
 int main(int argc, char* argv[])
 {
@@ -32,15 +32,15 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    StartPresident(argv[1]);
+    StartMaster(argv[1]);
 
     return EXIT_SUCCESS;
 }
 
-void StartPresident(const std::string& configFileName) {
-    dcvl::util::Configuration presidentConfigratuion;
-    presidentConfigratuion.Parse(configFileName);
+void StartMaster(const std::string& configFileName) {
+    dcvl::util::Configuration MasterConfigratuion;
+    MasterConfigratuion.Parse(configFileName);
 
-    dcvl::service::President president(presidentConfigratuion);
-    president.StartListen();
+    dcvl::service::Master Master(MasterConfigratuion);
+    Master.StartListen();
 }

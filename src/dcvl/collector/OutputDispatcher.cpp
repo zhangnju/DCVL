@@ -32,9 +32,9 @@ void OutputDispatcher::SetTaskInfos(const std::vector<task::TaskInfo>& taskInfos
     _taskInfos = taskInfos;
 }
 
-void OutputDispatcher::SetPresidentClient(message::CommandClient* presidentClient)
+void OutputDispatcher::SetMasterClient(message::CommandClient* MasterClient)
 {
-    _presidentClient.reset(presidentClient);
+    _MasterClient.reset(MasterClient);
 }
 
 void OutputDispatcher::Start()
@@ -112,7 +112,7 @@ void OutputDispatcher::ProcessPath(const task::TaskInfo& taskInfo, const task::P
 
 void OutputDispatcher::SendTupleTo(OutputItem* outputItem, const task::ExecutorPosition& executorPosition)
 {
-    dcvl::base::NetAddress destAddress = executorPosition.GetManager();
+    dcvl::base::NetAddress destAddress = executorPosition.GetWorker();
     std::string destIdentifier = destAddress.GetHost() + ":" + Int2String(destAddress.GetPort());
     std::string selfIdentifier = _selfAddress.GetHost() + ":" + Int2String(_selfAddress.GetPort());
 
@@ -175,13 +175,13 @@ void OutputDispatcher::SendTupleTo(OutputItem* outputItem, const task::ExecutorP
 void OutputDispatcher::AskField(TaskPathName taskPathName,
         const std::string& fieldValue, OutputDispatcher::AskFieldCallback callback)
 {
-    _presidentClient->Connect([taskPathName, fieldValue, callback, this](const message::CommandError&) {
+    _MasterClient->Connect([taskPathName, fieldValue, callback, this](const message::CommandError&) {
         dcvl::message::Command command(dcvl::message::Command::Type::AskField);
         command.AddArgument(taskPathName.first);
         command.AddArgument(taskPathName.second);
         command.AddArgument(fieldValue);
 
-        _presidentClient->SendCommand(command,
+        _MasterClient->SendCommand(command,
                 [callback](const dcvl::message::Response& response, const message::CommandError& error) {
             if ( error.GetType() != message::CommandError::Type::NoError ) {
                 LOG(LOG_ERROR) << error.what();

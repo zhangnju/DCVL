@@ -16,7 +16,7 @@
  * limitations under the license.
  */
 
-#include "dcvl/service/ManagerContext.h"
+#include "dcvl/service/WorkerContext.h"
 
 namespace dcvl {
 namespace service {
@@ -25,10 +25,10 @@ using dcvl::base::Variant;
 using dcvl::base::Variants;
 using dcvl::base::Serializable;
 
-ManagerContext::ManagerContext() : _spoutCount(0), _boltCount(0) {
+WorkerContext::WorkerContext() : _spoutCount(0), _boltCount(0) {
 }
 
-void ManagerContext::Serialize(base::Variants& variants) const
+void WorkerContext::Serialize(base::Variants& variants) const
 {
     Variant::Serialize(variants, _id);
     Variant::Serialize(variants, _spoutCount);
@@ -41,7 +41,7 @@ void ManagerContext::Serialize(base::Variants& variants) const
 
 }
 
-void ManagerContext::Deserialize(Variants::const_iterator& it)
+void WorkerContext::Deserialize(Variants::const_iterator& it)
 {
     Variant::Deserialize(it, _id);
     Variant::Deserialize(it, _spoutCount);

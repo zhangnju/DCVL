@@ -21,7 +21,7 @@
 #include "dcvl/message/CommandServer.h"
 #include "dcvl/util/NetListener.h"
 #include "dcvl/base/NetAddress.h"
-#include "dcvl/service/ManagerContext.h"
+#include "dcvl/service/WorkerContext.h"
 #include "dcvl/collector/OutputDispatcher.h"
 
 #include <functional>
@@ -52,33 +52,33 @@ namespace dcvl {
     }
 
     namespace service {
-        class Manager : public dcvl::message::CommandServer<ManagerContext> {
+        class Worker : public dcvl::message::CommandServer<WorkerContext> {
         public:
-            typedef std::function<void(const dcvl::message::Response& response)> JoinPresidentCallback;
+            typedef std::function<void(const dcvl::message::Response& response)> JoinMasterCallback;
             
-            Manager(const dcvl::util::Configuration& configuration);
+            Worker(const dcvl::util::Configuration& configuration);
 
-            void OnConnect(ManagerContext* context);
+            void OnConnect(WorkerContext* context);
 
-            void JoinPresident(JoinPresidentCallback callback);
+            void JoinMaster(JoinMasterCallback callback);
 
-            void OnHeartbeat(ManagerContext* context, const dcvl::message::Command& command,
+            void OnHeartbeat(WorkerContext* context, const dcvl::message::Command& command,
                             dcvl::message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor);
-            void OnSyncMetadata(ManagerContext* context, const dcvl::message::Command& command,
+            void OnSyncMetadata(WorkerContext* context, const dcvl::message::Command& command,
                             dcvl::message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor);
-            void OnSendTuple(ManagerContext* context, const dcvl::message::Command& command,
+            void OnSendTuple(WorkerContext* context, const dcvl::message::Command& command,
                             dcvl::message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor);
 
 
         private:
             void InitSelfContext();
             void InitExecutors();
-            void OwnManagerTasks();
-            void ShowManagerMetadata();
+            void OwnWorkerTasks();
+            void ShowWorkerMetadata();
             void ShowTaskInfos();
             void InitSpoutExecutors();
             void InitBoltExecutors();
-            void InitPresidentConnector();
+            void InitMasterConnector();
             void ReserveExecutors();
             void InitEvents();
             void InitTaskFieldsMap();
@@ -87,10 +87,10 @@ namespace dcvl {
             std::string _name;
             std::string _host;
             int32_t _port;
-            std::shared_ptr<dcvl::util::Configuration> _managerConfiguration;
-            dcvl::util::NetConnector* _presidentConnector;
-            dcvl::message::CommandClient* _presidentClient;
-            std::shared_ptr<dcvl::service::ManagerContext> _selfContext;
+            std::shared_ptr<dcvl::util::Configuration> _WorkerConfiguration;
+            dcvl::util::NetConnector* _MasterConnector;
+            dcvl::message::CommandClient* _MasterClient;
+            std::shared_ptr<dcvl::service::WorkerContext> _selfContext;
             std::vector<std::shared_ptr<dcvl::task::SpoutExecutor>> _spoutExecutors;
             std::vector<std::shared_ptr<dcvl::task::BoltExecutor>> _boltExecutors;
             std::vector<std::shared_ptr<dcvl::collector::OutputCollector>> _spoutCollectors;

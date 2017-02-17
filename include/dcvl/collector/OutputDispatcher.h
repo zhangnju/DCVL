@@ -78,7 +78,7 @@ public:
     }
 
     void SetTaskInfos(const std::vector<dcvl::task::TaskInfo>& taskInfos);
-    void SetPresidentClient(message::CommandClient* presidentClient);
+    void SetMasterClient(message::CommandClient* MasterClient);
 
     void Start();
 
@@ -106,7 +106,7 @@ private:
     std::vector<dcvl::task::TaskInfo> _taskInfos;
 
     std::vector<std::shared_ptr<dcvl::collector::TaskQueue>> _selfTasks;
-    std::shared_ptr<message::CommandClient> _presidentClient;
+    std::shared_ptr<message::CommandClient> _MasterClient;
     std::map<std::string, message::CommandClient*> _commandClients;
     std::map<TaskPathName, std::map<std::string, task::ExecutorPosition>> _fieldsDestinations;
     std::map<std::string, const std::vector<std::string>*> _taskFields;

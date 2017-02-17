@@ -1,4 +1,4 @@
-#include "dcvl/service/President.h"
+#include "dcvl/service/Master.h"
 #include "dcvl/util/NetConnector.h"
 #include "dcvl/message/CommandClient.h"
 #include "dcvl/util/Configuration.h"
@@ -15,77 +15,77 @@
 
 namespace dcvl {
     namespace service {
-        President::President(const dcvl::base::NetAddress& host) : 
+        Master::Master(const dcvl::base::NetAddress& host) : 
                 CommandServer(new dcvl::util::NetListener(host)),
-                _presidentHost(host),
-                _managerCount(0) {
-            OnConnection(std::bind(&President::OnConnect, this, std::placeholders::_1));
-            OnCommand(dcvl::message::Command::Type::Join, this, &President::OnJoin);
-            OnCommand(dcvl::message::Command::Type::AskField, this, &President::OnAskField);
+                _MasterHost(host),
+                _WorkerCount(0) {
+            OnConnection(std::bind(&Master::OnConnect, this, std::placeholders::_1));
+            OnCommand(dcvl::message::Command::Type::Join, this, &Master::OnJoin);
+            OnCommand(dcvl::message::Command::Type::AskField, this, &Master::OnAskField);
         }
 
-        President::President(const dcvl::util::Configuration& configuration) : 
-                President(dcvl::base::NetAddress(
-                    configuration.GetProperty(ConfigurationKey::PresidentHost),
-                    configuration.GetIntegerProperty(ConfigurationKey::PresidentPort))) {
-            _managerCount = configuration.GetIntegerProperty(ConfigurationKey::ManagerCount);
+        Master::Master(const dcvl::util::Configuration& configuration) : 
+                Master(dcvl::base::NetAddress(
+                    configuration.GetProperty(ConfigurationKey::MasterHost),
+                    configuration.GetIntegerProperty(ConfigurationKey::MasterPort))) {
+            _WorkerCount = configuration.GetIntegerProperty(ConfigurationKey::WorkerCount);
             _configuration.reset(new dcvl::util::Configuration(configuration));
 
-            LOG(LOG_DEBUG) << "Need managers: " << _managerCount;
+            LOG(LOG_DEBUG) << "Need workers: " << _WorkerCount;
         }
 
-        void President::OnConnect(ManagerContext* context) {
+        void Master::OnConnect(WorkerContext* context) {
         }
 
-        void President::OnJoin(ManagerContext* context, const dcvl::message::Command& command,
+        void Master::OnJoin(WorkerContext* context, const dcvl::message::Command& command,
                 dcvl::message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor) {
             std::string joinerType = command.GetArgument(0).GetStringValue();
-            std::string managerHost = command.GetArgument(1).GetStringValue();
-            int32_t managerPort = command.GetArgument(2).GetInt32Value();
+            std::string WorkerHost = command.GetArgument(1).GetStringValue();
+            int32_t WorkerPort = command.GetArgument(2).GetInt32Value();
 
             LOG(LOG_DEBUG) << "Join node: " << joinerType;
             
-            ManagerContext managerContext;
+            WorkerContext WorkerContext;
             base::Variants::const_iterator currentIterator = command.GetArguments().cbegin() + 3;
-            managerContext.Deserialize(currentIterator);
+            WorkerContext.Deserialize(currentIterator);
 
-            LOG(LOG_DEBUG) << "Manager name: " << managerContext.GetId();
-            LOG(LOG_DEBUG) << "Host: " << managerHost;
-            LOG(LOG_DEBUG) << "Port: " << managerPort;
-            LOG(LOG_DEBUG) << "Spout count: " << managerContext.GetSpoutCount();
-            LOG(LOG_DEBUG) << "Bolt count: " << managerContext.GetBoltCount();
-            LOG(LOG_DEBUG) << "Task info count: " << managerContext.GetTaskInfos().size();
-            LOG(LOG_DEBUG) << "Free spout count: " << managerContext.GetFreeSpouts().size();
-            LOG(LOG_DEBUG) << "Free bolt count: " << managerContext.GetFreeBolts().size();
-            LOG(LOG_DEBUG) << "Busy spout count: " << managerContext.GetBusySpouts().size();
-            LOG(LOG_DEBUG) << "Busy bolt count: " << managerContext.GetBusyBolts().size();
+            LOG(LOG_DEBUG) << "Worker name: " << WorkerContext.GetId();
+            LOG(LOG_DEBUG) << "Host: " << WorkerHost;
+            LOG(LOG_DEBUG) << "Port: " << WorkerPort;
+            LOG(LOG_DEBUG) << "Spout count: " << WorkerContext.GetSpoutCount();
+            LOG(LOG_DEBUG) << "Bolt count: " << WorkerContext.GetBoltCount();
+            LOG(LOG_DEBUG) << "Task info count: " << WorkerContext.GetTaskInfos().size();
+            LOG(LOG_DEBUG) << "Free spout count: " << WorkerContext.GetFreeSpouts().size();
+            LOG(LOG_DEBUG) << "Free bolt count: " << WorkerContext.GetFreeBolts().size();
+            LOG(LOG_DEBUG) << "Busy spout count: " << WorkerContext.GetBusySpouts().size();
+            LOG(LOG_DEBUG) << "Busy bolt count: " << WorkerContext.GetBusyBolts().size();
 
-            managerContext.SetNetAddress(dcvl::base::NetAddress(
-                    managerHost, managerPort));
-            managerContext.PrepareTaskInfos();
-            _managers.push_back(managerContext);
+            WorkerContext.SetNetAddress(dcvl::base::NetAddress(
+                    WorkerHost, WorkerPort));
+            WorkerContext.PrepareTaskInfos();
+            _Workers.push_back(WorkerContext);
 
             // Response
             dcvl::message::Response response(dcvl::message::Response::Status::Successful);
-            response.AddArgument({ NodeType::President });
+            response.AddArgument({ NodeType::Master });
 
             Responsor(response);
 
             // Initialize command clients
-            dcvl::base::NetAddress managerAddress(managerHost,
-                managerPort);
-            dcvl::util::NetConnector* managerConnector =
-                    new dcvl::util::NetConnector(managerAddress);
-            dcvl::message::CommandClient* managerCommandClient =
-                    new dcvl::message::CommandClient(managerConnector);
+            dcvl::base::NetAddress WorkerAddress(WorkerHost,
+                WorkerPort);
+            dcvl::util::NetConnector* WorkerConnector =
+                    new dcvl::util::NetConnector(WorkerAddress);
+            dcvl::message::CommandClient* WorkerCommandClient =
+                    new dcvl::message::CommandClient(WorkerConnector);
 
-            _managerClients.insert({managerContext.GetId(),
-                    std::shared_ptr<dcvl::message::CommandClient>(managerCommandClient)});
+            _WorkerClients.insert({WorkerContext.GetId(),
+                    std::shared_ptr<dcvl::message::CommandClient>(WorkerCommandClient)});
 
-            SendHeartbeat(managerContext.GetId(), 0);
+            SendHeartbeat(WorkerContext.GetId(), 0);
 
             // Initialize topology
-            if ( _managers.size() == _managerCount ) {
+            if ( _Workers.size() == _WorkerCount ) {
                 std::string topologyName = _configuration->GetProperty(ConfigurationKey::TopologyName);
                 dcvl::topology::Topology* topology =
                         dcvl::topology::TopologyLoader::GetInstance().GetTopology(topologyName).get();
@@ -93,7 +93,7 @@ namespace dcvl {
             }
         }
 
-        void President::OnAskField(ManagerContext* context, const dcvl::message::Command& command,
+        void Master::OnAskField(WorkerContext* context, const dcvl::message::Command& command,
                                 dcvl::message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor)
         {
             std::string sourceTaskName = command.GetArgument(0).GetStringValue();
@@ -127,7 +127,7 @@ namespace dcvl {
             Responsor(response);
         }
 
-        void President::OnOrderId(ManagerContext* context, const dcvl::message::Command& command,
+        void Master::OnOrderId(WorkerContext* context, const dcvl::message::Command& command,
                                dcvl::message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor)
         {
             std::string topologyName = command.GetArgument(0).GetStringValue();
@@ -141,7 +141,7 @@ namespace dcvl {
             Responsor(response);
         }
 
-        std::list<task::TaskInfo> President::GetAllSpoutTasks(
+        std::list<task::TaskInfo> Master::GetAllSpoutTasks(
                 const std::map<std::string, dcvl::spout::SpoutDeclarer>& spoutDeclarers,
                 dcvl::topology::Topology* topology)
         {
@@ -165,11 +165,11 @@ namespace dcvl {
         }
 
         std::map<std::string, std::vector<dcvl::task::TaskInfo*>>
-                President::AllocateSpoutTasks(std::list<dcvl::task::TaskInfo>& originSpoutTasks)
+                Master::AllocateSpoutTasks(std::list<dcvl::task::TaskInfo>& originSpoutTasks)
         {
             std::map<std::string, std::vector<dcvl::task::TaskInfo*>> nameToSpoutTasks;
-            // Allocate task for every manager
-            for ( ManagerContext& managerContext : _managers ) {
+            // Allocate task for every worker
+            for ( WorkerContext& WorkerContext : _Workers ) {
                 if ( !originSpoutTasks.size() ) {
                     break;
                 }
@@ -180,18 +180,18 @@ namespace dcvl {
                     }
 
                     // If useNextSpout return -1, the spout slots is used up
-                    int32_t spoutIndex = managerContext.useNextSpout();
+                    int32_t spoutIndex = WorkerContext.useNextSpout();
                     if ( spoutIndex == -1 ) {
                         break;
                     }
 
                     // Put the spout task into spout slot
                     dcvl::task::TaskInfo taskInfo = originSpoutTasks.front();
-                    taskInfo.SetManagerContext(&managerContext);
-                    taskInfo.SetExecutorIndex(managerContext.GetExecutorIndex(
-                            ManagerContext::ExecutorType::Spout, spoutIndex));
+                    taskInfo.SetWorkerContext(&WorkerContext);
+                    taskInfo.SetExecutorIndex(WorkerContext.GetExecutorIndex(
+                            WorkerContext::ExecutorType::Spout, spoutIndex));
                     originSpoutTasks.pop_front();
-                    managerContext.SetSpoutTaskInfo(spoutIndex, taskInfo);
+                    WorkerContext.SetSpoutTaskInfo(spoutIndex, taskInfo);
 
                     // Insert the spout task pointer into mapper
                     std::string taskName = taskInfo.GetTaskName();
@@ -201,14 +201,14 @@ namespace dcvl {
                         spoutTasksPair = nameToSpoutTasks.find(taskName);
                     }
 
-                    spoutTasksPair->second.push_back(&(managerContext.GetSpoutTaskInfo(spoutIndex)));
+                    spoutTasksPair->second.push_back(&(WorkerContext.GetSpoutTaskInfo(spoutIndex)));
                 }
             }
 
             return nameToSpoutTasks;
         }
 
-        std::list<task::TaskInfo> President::GetAllBoltTasks(dcvl::topology::Topology* topology,
+        std::list<task::TaskInfo> Master::GetAllBoltTasks(dcvl::topology::Topology* topology,
                 const std::map<std::string, dcvl::bolt::BoltDeclarer>& boltDeclarers)
         {
             std::list<dcvl::task::TaskInfo> originBoltTasks;
@@ -232,11 +232,11 @@ namespace dcvl {
         }
 
         std::map<std::string, std::vector<dcvl::task::TaskInfo*>>
-            President::AllocateBoltTasks(std::list<dcvl::task::TaskInfo>& originBoltTasks)
+            Master::AllocateBoltTasks(std::list<dcvl::task::TaskInfo>& originBoltTasks)
         {
             std::map<std::string, std::vector<dcvl::task::TaskInfo*>> nameToBoltTasks;
             // Allocate bolt tasks
-            for ( ManagerContext& managerContext : _managers ) {
+            for ( WorkerContext& WorkerContext : _Workers ) {
                 if ( !originBoltTasks.size() ) {
                     break;
                 }
@@ -247,18 +247,18 @@ namespace dcvl {
                     }
 
                     // If useNextBolt return -1, the bolt slots is used up
-                    int32_t boltIndex = managerContext.useNextBolt();
+                    int32_t boltIndex = WorkerContext.useNextBolt();
                     if ( boltIndex == -1 ) {
                         break;
                     }
 
                     // Put the bolt task into bolt slot
                     dcvl::task::TaskInfo taskInfo = originBoltTasks.front();
-                    taskInfo.SetManagerContext(&managerContext);
-                    taskInfo.SetExecutorIndex(managerContext.GetExecutorIndex(
-                            ManagerContext::ExecutorType::Bolt, boltIndex));
+                    taskInfo.SetWorkerContext(&WorkerContext);
+                    taskInfo.SetExecutorIndex(WorkerContext.GetExecutorIndex(
+                            WorkerContext::ExecutorType::Bolt, boltIndex));
                     originBoltTasks.pop_front();
-                    managerContext.SetBoltTaskInfo(boltIndex, taskInfo);
+                    WorkerContext.SetBoltTaskInfo(boltIndex, taskInfo);
 
                     // Insert the bolt task pointer into mapper
                     std::string taskName = taskInfo.GetTaskName();
@@ -268,14 +268,14 @@ namespace dcvl {
                         boltTasksPair = nameToBoltTasks.find(taskName);
                     }
 
-                    boltTasksPair->second.push_back(&(managerContext.GetBoltTaskInfo(boltIndex)));
+                    boltTasksPair->second.push_back(&(WorkerContext.GetBoltTaskInfo(boltIndex)));
                 }
             }
 
             return nameToBoltTasks;
         }
 
-        std::vector<task::TaskInfo*> President::FindTask(
+        std::vector<task::TaskInfo*> Master::FindTask(
                 const std::map<std::string, std::vector<task::TaskInfo*>>& nameToBoltTasks,
                 const std::map<std::string, std::vector<task::TaskInfo*>>& nameToSpoutTasks,
                 const std::string& sourceTaskName)
@@ -293,7 +293,7 @@ namespace dcvl {
             return std::vector<task::TaskInfo*>();
         }
 
-        std::vector<task::TaskInfo*> President::FindTask(
+        std::vector<task::TaskInfo*> Master::FindTask(
                 const std::map<std::string, std::vector<task::TaskInfo*>>& nameToBoltTasks,
                 const std::string& sourceTaskName)
         {
@@ -305,14 +305,14 @@ namespace dcvl {
             return std::vector<task::TaskInfo*>();
         }
 
-        void President::ShowTaskInfos(const std::vector<dcvl::task::TaskInfo>& taskInfos)
+        void Master::ShowTaskInfos(const std::vector<dcvl::task::TaskInfo>& taskInfos)
         {
             for ( const dcvl::task::TaskInfo& taskInfo : taskInfos ) {
-                if ( !taskInfo.GetManagerContext() ) {
+                if ( !taskInfo.GetWorkerContext() ) {
                     continue;
                 }
 
-                LOG(LOG_DEBUG) << "    Manager: " << taskInfo.GetManagerContext()->GetId();
+                LOG(LOG_DEBUG) << "    Worker: " << taskInfo.GetWorkerContext()->GetId();
                 LOG(LOG_DEBUG) << "    Exectuor index: " << taskInfo.GetExecutorIndex();
                 LOG(LOG_DEBUG) << "    Paths: ";
                 const std::list<dcvl::task::PathInfo>& paths = taskInfo.GetPaths();
@@ -323,9 +323,9 @@ namespace dcvl {
                     LOG(LOG_DEBUG) << "        Group method: " << groupMethod;
                     if ( path.GetGroupMethod() == dcvl::task::PathInfo::GroupMethod::Global) {
                         LOG(LOG_DEBUG) << "        Destination host: " <<
-                                     path.GetDestinationExecutors()[0].GetManager().GetHost();
+                                     path.GetDestinationExecutors()[0].GetWorker().GetHost();
                         LOG(LOG_DEBUG) << "        Destination port: " <<
-                                     path.GetDestinationExecutors()[0].GetManager().GetPort();
+                                     path.GetDestinationExecutors()[0].GetWorker().GetPort();
                         LOG(LOG_DEBUG) << "        Destination executor index: " <<
                                      path.GetDestinationExecutors()[0].GetExecutorIndex();
                     }
@@ -333,59 +333,59 @@ namespace dcvl {
             }
         }
 
-        void President::SyncWithManagers()
+        void Master::SyncWithWorkers()
         {
-            for ( ManagerContext& managerContext : _managers ) {
-                std::string managerId = managerContext.GetId();
-                LOG(LOG_DEBUG) << "Sync meta data with supervisr: " << managerId;
-                std::shared_ptr<dcvl::message::CommandClient> managerClient =
-                        _managerClients[managerId];
+            for ( WorkerContext& WorkerContext : _Workers ) {
+                std::string WorkerId = WorkerContext.GetId();
+                LOG(LOG_DEBUG) << "Sync meta data with supervisr: " << WorkerId;
+                std::shared_ptr<dcvl::message::CommandClient> WorkerClient =
+                        _WorkerClients[WorkerId];
 
-                managerClient->GetConnector()->Connect([managerId, managerClient, &managerContext, this]
+                WorkerClient->GetConnector()->Connect([WorkerId, WorkerClient, &WorkerContext, this]
                 (const util::SocketError&){
                     dcvl::message::Command command(dcvl::message::Command::Type::SyncMetadata);
 
-                    // 1 means President to Manager
-                    // 2 means Manager to President
+                    // 1 means Master to Worker
+                    // 2 means Worker to Master
                     command.AddArgument({ 1 });
 
-                    base::Variants managerContextVariants;
-                    managerContext.Serialize(managerContextVariants);
-                    command.AddArguments(managerContextVariants);
-                    managerClient->SendCommand(command,
-                        [managerId, this](const dcvl::message::Response& response, const message::CommandError& error) -> void {
+                    base::Variants WorkerContextVariants;
+                    WorkerContext.Serialize(WorkerContextVariants);
+                    command.AddArguments(WorkerContextVariants);
+                    WorkerClient->SendCommand(command,
+                        [WorkerId, this](const dcvl::message::Response& response, const message::CommandError& error) -> void {
                         if ( error.GetType() != message::CommandError::Type::NoError ) {
                             LOG(LOG_ERROR) << error.what();
                             return;
                         }
 
                         if ( response.GetStatus() == dcvl::message::Response::Status::Successful ) {
-                            LOG(LOG_DEBUG) << "Sync with " << managerId << " successfully.";
+                            LOG(LOG_DEBUG) << "Sync with " << WorkerId << " successfully.";
                         }
                         else {
-                            LOG(LOG_DEBUG) << "Sync with " << managerId << " failed.";
+                            LOG(LOG_DEBUG) << "Sync with " << WorkerId << " failed.";
                         }
                     });
                 });
             }
         }
 
-        void President::ShowManagerTaskInfos()
+        void Master::ShowWorkerTaskInfos()
         {
             LOG(LOG_DEBUG) << "================ Allocate result ================";
-            for ( ManagerContext& managerContext : _managers ) {
-                LOG(LOG_DEBUG) << managerContext.GetId();
-                LOG(LOG_DEBUG) << "  Host: " << managerContext.GetNetAddress().GetHost();
-                LOG(LOG_DEBUG) << "  Port: " << managerContext.GetNetAddress().GetPort();
+            for ( WorkerContext& WorkerContext : _Workers ) {
+                LOG(LOG_DEBUG) << WorkerContext.GetId();
+                LOG(LOG_DEBUG) << "  Host: " << WorkerContext.GetNetAddress().GetHost();
+                LOG(LOG_DEBUG) << "  Port: " << WorkerContext.GetNetAddress().GetPort();
 
                 LOG(LOG_DEBUG) << "  Tasks: ";
                 const std::vector<dcvl::task::TaskInfo>& taskInfos =
-                        managerContext.GetTaskInfos();
+                        WorkerContext.GetTaskInfos();
                 ShowTaskInfos(taskInfos);
             }
         }
 
-        void President::CalculateTaskPaths(
+        void Master::CalculateTaskPaths(
                 const std::map<std::string, std::vector<dcvl::task::TaskInfo*>>& nameToBoltTasks,
                 const std::map<std::string, dcvl::bolt::BoltDeclarer>& boltDeclarers,
                 const std::map<std::string, std::vector<dcvl::task::TaskInfo*>>& nameToSpoutTasks)
@@ -408,7 +408,7 @@ namespace dcvl {
                 std::vector<task::ExecutorPosition>  destExecutorPositions;
                 for ( dcvl::task::TaskInfo* destTask : destTasks ) {
                     destExecutorPositions.push_back(task::ExecutorPosition(
-                        destTask->GetManagerContext()->GetNetAddress(),
+                        destTask->GetWorkerContext()->GetNetAddress(),
                         destTask->GetExecutorIndex()
                     ));
                 }
@@ -422,7 +422,7 @@ namespace dcvl {
                         pathInfo.SetGroupMethod(dcvl::task::PathInfo::GroupMethod::Global);
                         pathInfo.SetDestinationTask(destTask->GetTaskName());
                         pathInfo.SetDestinationExecutors({task::ExecutorPosition(
-                                destTask->GetManagerContext()->GetNetAddress(),
+                                destTask->GetWorkerContext()->GetNetAddress(),
                                 destTask->GetExecutorIndex()
                         )});
 
@@ -461,22 +461,22 @@ namespace dcvl {
             }
         }
 
-        void President::ShowManagerMetadata()
+        void Master::ShowWorkerMetadata()
         {
-            LOG(LOG_DEBUG) << "================ Manager metadata ================";
-            for ( ManagerContext& managerContext : _managers ) {
-                LOG(LOG_DEBUG) << "Manager name: " << managerContext.GetId();
-                LOG(LOG_DEBUG) << "  Spout count: " << managerContext.GetSpoutCount();
-                LOG(LOG_DEBUG) << "  Bolt count: " << managerContext.GetBoltCount();
-                LOG(LOG_DEBUG) << "  Task info count: " << managerContext.GetTaskInfos().size();
-                LOG(LOG_DEBUG) << "  Free spout count: " << managerContext.GetFreeSpouts().size();
-                LOG(LOG_DEBUG) << "  Free bolt count: " << managerContext.GetFreeBolts().size();
-                LOG(LOG_DEBUG) << "  Busy spout count: " << managerContext.GetBusySpouts().size();
-                LOG(LOG_DEBUG) << "  Busy bolt count: " << managerContext.GetBusyBolts().size();
+            LOG(LOG_DEBUG) << "================ Worker metadata ================";
+            for ( WorkerContext& WorkerContext : _Workers ) {
+                LOG(LOG_DEBUG) << "Worker name: " << WorkerContext.GetId();
+                LOG(LOG_DEBUG) << "  Spout count: " << WorkerContext.GetSpoutCount();
+                LOG(LOG_DEBUG) << "  Bolt count: " << WorkerContext.GetBoltCount();
+                LOG(LOG_DEBUG) << "  Task info count: " << WorkerContext.GetTaskInfos().size();
+                LOG(LOG_DEBUG) << "  Free spout count: " << WorkerContext.GetFreeSpouts().size();
+                LOG(LOG_DEBUG) << "  Free bolt count: " << WorkerContext.GetFreeBolts().size();
+                LOG(LOG_DEBUG) << "  Busy spout count: " << WorkerContext.GetBusySpouts().size();
+                LOG(LOG_DEBUG) << "  Busy bolt count: " << WorkerContext.GetBusyBolts().size();
             }
         }
 
-        void President::SubmitTopology(dcvl::topology::Topology* topology) {
+        void Master::SubmitTopology(dcvl::topology::Topology* topology) {
             LOG(LOG_INFO) << "Submit topology: " << topology->GetName();
 
             _orderIds[topology->GetName()] = 0;
@@ -486,7 +486,7 @@ namespace dcvl {
             const std::map<std::string, dcvl::bolt::BoltDeclarer>& boltDeclarers =
                     topology->GetBoltDeclarers();
 
-            // Allocate task and send to manager
+            // Allocate task and send to Worker
             std::list<dcvl::task::TaskInfo> originSpoutTasks =
                     GetAllSpoutTasks(spoutDeclarers, topology);
             std::map<std::string, std::vector<dcvl::task::TaskInfo*>> nameToSpoutTasks =
@@ -498,20 +498,20 @@ namespace dcvl {
                     AllocateBoltTasks(originBoltTasks);
 
             CalculateTaskPaths(nameToBoltTasks, boltDeclarers, nameToSpoutTasks);
-            ShowManagerTaskInfos();
-            ShowManagerMetadata();
-            SyncWithManagers();
+            ShowWorkerTaskInfos();
+            ShowWorkerMetadata();
+            SyncWithWorkers();
         }
 
         const int32_t MAX_HEARTBEAT_FAILED_TIMES = 5;
-        void President::SendHeartbeat(const std::string managerId, int32_t sendTimes)
+        void Master::SendHeartbeat(const std::string WorkerId, int32_t sendTimes)
         {
-            LOG(LOG_DEBUG) << "Sending heartbeat to " << managerId;
+            LOG(LOG_DEBUG) << "Sending heartbeat to " << WorkerId;
 
             std::shared_ptr<dcvl::message::CommandClient> commandClient =
-                    _managerClients.at(managerId);
+                    _WorkerClients.at(WorkerId);
 
-            commandClient->GetConnector()->Connect([commandClient, managerId, sendTimes, this]
+            commandClient->GetConnector()->Connect([commandClient, WorkerId, sendTimes, this]
             (const util::SocketError& error){
                 if ( error.GetType() != util::SocketError::Type::NoError ) {
                     LOG(LOG_DEBUG) << "Sendtimes: " << sendTimes;
@@ -520,25 +520,25 @@ namespace dcvl {
                     }
 
                     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                    this->SendHeartbeat(managerId, sendTimes + 1);
+                    this->SendHeartbeat(WorkerId, sendTimes + 1);
 
                     return;
                 }
 
-                LOG(LOG_DEBUG) << "Connected to " << managerId;
+                LOG(LOG_DEBUG) << "Connected to " << WorkerId;
                 dcvl::message::Command command(dcvl::message::Command::Type::Heartbeat);
 
                 commandClient->SendCommand(command,
-                    [managerId, sendTimes, this](const dcvl::message::Response& response, const message::CommandError& error) {
+                    [WorkerId, sendTimes, this](const dcvl::message::Response& response, const message::CommandError& error) {
                     if ( error.GetType() != message::CommandError::Type::NoError ) {
                         LOG(LOG_ERROR) << error.what();
                     }
 
                     if ( response.GetStatus() == dcvl::message::Response::Status::Successful ) {
-                        LOG(LOG_INFO) << managerId << " alived.";
+                        LOG(LOG_INFO) << WorkerId << " alived.";
                     }
                     else {
-                        LOG(LOG_ERROR) << managerId << " dead.";
+                        LOG(LOG_ERROR) << WorkerId << " dead.";
                     }
                 });
             });

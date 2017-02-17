@@ -3,7 +3,7 @@
 #include "dcvl/message/CommandServer.h"
 #include "dcvl/util/NetListener.h"
 #include "dcvl/base/NetAddress.h"
-#include "dcvl/service/ManagerContext.h"
+#include "dcvl/service/WorkerContext.h"
 
 namespace dcvl {
     namespace util {
@@ -29,22 +29,22 @@ namespace dcvl {
     namespace service {
         typedef std::pair<std::string, std::string> TaskPathName;
 
-        class President : public dcvl::message::CommandServer<ManagerContext> {
+        class Master : public dcvl::message::CommandServer<WorkerContext> {
         public:
-            President(const dcvl::base::NetAddress& host);
-            President(const dcvl::util::Configuration& configuration);
+            Master(const dcvl::base::NetAddress& host);
+            Master(const dcvl::util::Configuration& configuration);
 
-            void OnConnect(ManagerContext* context);
-            void OnJoin(ManagerContext* context, const dcvl::message::Command& command,
+            void OnConnect(WorkerContext* context);
+            void OnJoin(WorkerContext* context, const dcvl::message::Command& command,
                 dcvl::message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor);
-            void OnAskField(ManagerContext* context, const dcvl::message::Command& command,
+            void OnAskField(WorkerContext* context, const dcvl::message::Command& command,
                 dcvl::message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor);
-            void OnOrderId(ManagerContext* context, const dcvl::message::Command& command,
+            void OnOrderId(WorkerContext* context, const dcvl::message::Command& command,
                            dcvl::message::CommandServer<dcvl::message::BaseCommandServerContext>::Responsor Responsor);
             void SubmitTopology(dcvl::topology::Topology* topology);
             
         private:
-            void SendHeartbeat(const std::string managerId, int32_t sendTimes);
+            void SendHeartbeat(const std::string WorkerId, int32_t sendTimes);
             std::list<dcvl::task::TaskInfo> GetAllSpoutTasks(const std::map<std::string, dcvl::spout::SpoutDeclarer>& spoutDeclarers, dcvl::topology::Topology* topology);
             void AllocateSpoutTasks(std::map<std::string, dcvl::task::TaskInfo*> nameToSpoutTasks, std::list<dcvl::task::TaskInfo> originSpoutTasks);
             std::map<std::string, std::vector<task::TaskInfo*> > AllocateSpoutTasks(std::list<task::TaskInfo>& originSpoutTasks);
@@ -61,17 +61,17 @@ namespace dcvl {
                     const std::map<std::string, std::vector<task::TaskInfo*> >& nameToBoltTasks,
                     const std::map<std::string, dcvl::bolt::BoltDeclarer>& boltDeclarers,
                     const std::map<std::string, std::vector<task::TaskInfo*> >& nameToSpoutTasks);
-            void ShowManagerMetadata();
-            void ShowManagerTaskInfos();
+            void ShowWorkerMetadata();
+            void ShowWorkerTaskInfos();
             void ShowTaskInfos(const std::vector<dcvl::task::TaskInfo>& taskInfos);
-            void SyncWithManagers();
+            void SyncWithWorkers();
 
         private:
-            dcvl::base::NetAddress _presidentHost;
-            std::vector<ManagerContext> _managers;
-            int32_t _managerCount;
+            dcvl::base::NetAddress _MasterHost;
+            std::vector<WorkerContext> _Workers;
+            int32_t _WorkerCount;
             std::shared_ptr<dcvl::util::Configuration> _configuration;
-            std::map<std::string, std::shared_ptr<dcvl::message::CommandClient>> _managerClients;
+            std::map<std::string, std::shared_ptr<dcvl::message::CommandClient>> _WorkerClients;
             std::map<TaskPathName, std::vector<task::ExecutorPosition>> _fieldsCandidates;
             std::map<TaskPathName, std::map<std::string, task::ExecutorPosition>> _fieldsDestinations;
             std::map<std::string, int64_t> _orderIds;

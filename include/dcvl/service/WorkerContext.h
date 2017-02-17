@@ -26,14 +26,14 @@
 
 namespace dcvl {
     namespace service {
-        class ManagerContext : base::Serializable {
+        class WorkerContext : base::Serializable {
         public:
             enum class ExecutorType {
                 Spout,
                 Bolt
             };
 
-            ManagerContext();
+            WorkerContext();
 
             const std::string& GetId() const {
                 return _id;

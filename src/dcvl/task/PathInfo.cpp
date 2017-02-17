@@ -44,13 +44,13 @@ void PathInfo::Deserialize(Variants::const_iterator& it)
 
 void ExecutorPosition::Serialize(base::Variants& variants) const
 {
-    Variant::Serialize(variants, _manager);
+    Variant::Serialize(variants, _Worker);
     Variant::Serialize(variants, _executorIndex);
 }
 
 void ExecutorPosition::Deserialize(Variants::const_iterator& it)
 {
-    Variant::Deserialize(it, _manager);
+    Variant::Deserialize(it, _Worker);
     Variant::Deserialize(it, _executorIndex);
 }
 

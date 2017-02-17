@@ -27,7 +27,7 @@
 
 namespace dcvl {
     namespace service {
-        class ManagerContext;
+        class WorkerContext;
     }
 
     namespace task {
@@ -36,16 +36,16 @@ namespace dcvl {
             ExecutorPosition() : _executorIndex(-1) {
             }
 
-            ExecutorPosition(const dcvl::base::NetAddress& manager, int32_t executorIndex) :
-                        _manager(manager), _executorIndex(executorIndex) {
+            ExecutorPosition(const dcvl::base::NetAddress& worker, int32_t executorIndex) :
+                        _Worker(worker), _executorIndex(executorIndex) {
             }
 
-            const dcvl::base::NetAddress& GetManager() const {
-                return _manager;
+            const dcvl::base::NetAddress& GetWorker() const {
+                return _Worker;
             }
 
-            void SetManager(const dcvl::base::NetAddress& manager) {
-                _manager = manager;
+            void SetWorker(const dcvl::base::NetAddress& Worker) {
+                _Worker = Worker;
             }
 
             int32_t GetExecutorIndex() const {
@@ -60,7 +60,7 @@ namespace dcvl {
             virtual void Deserialize(dcvl::base::Variants::const_iterator& it) override;
 
         private:
-            dcvl::base::NetAddress _manager;
+            dcvl::base::NetAddress _Worker;
             int32_t _executorIndex;
         };
 
@@ -121,7 +121,7 @@ namespace dcvl {
 
         class TaskInfo : public dcvl::base::Serializable {
         public:
-            TaskInfo() : _managerContext(nullptr), _executorIndex(-1) {
+            TaskInfo() : _WorkerContext(nullptr), _executorIndex(-1) {
             }
 
             const std::string& GetTopologyName() const {
@@ -152,16 +152,16 @@ namespace dcvl {
                 _paths.push_back(path);
             }
 
-            const dcvl::service::ManagerContext* GetManagerContext() const {
-                return _managerContext;
+            const dcvl::service::WorkerContext* GetWorkerContext() const {
+                return _WorkerContext;
             }
 
-            dcvl::service::ManagerContext* GetManagerContext() {
-                return _managerContext;
+            dcvl::service::WorkerContext* GetWorkerContext() {
+                return _WorkerContext;
             }
 
-            void SetManagerContext(dcvl::service::ManagerContext* context) {
-                _managerContext = context;
+            void SetWorkerContext(dcvl::service::WorkerContext* context) {
+                _WorkerContext = context;
             }
 
             int32_t GetExecutorIndex() const {
@@ -179,7 +179,7 @@ namespace dcvl {
             std::string _taskName;
             std::list<PathInfo> _paths;
 
-            dcvl::service::ManagerContext* _managerContext;
+            dcvl::service::WorkerContext* _WorkerContext;
             int32_t _executorIndex;
         };
     }

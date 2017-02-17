@@ -16,7 +16,7 @@
  * limitations under the license.
  */
 
-#include "dcvl/service/Manager.h"
+#include "dcvl/service/Worker.h"
 #include "dcvl/util/Configuration.h"
 #include "dcvl/base/Constants.h"
 
@@ -25,7 +25,7 @@
 
 using namespace std;
 
-void StartManager(const std::string& configFileName);
+void StartWorker(const std::string& configFileName);
 
 int main(int argc, char* argv[])
 {
@@ -33,26 +33,26 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    StartManager(argv[1]);
+    StartWorker(argv[1]);
 
     return EXIT_SUCCESS;
 }
 
-void StartManager(const std::string& configFileName) {
+void StartWorker(const std::string& configFileName) {
     using dcvl::ConfigurationKey;
 
-    dcvl::util::Configuration managerConfiguration;
-    managerConfiguration.Parse(configFileName);
+    dcvl::util::Configuration WorkerConfiguration;
+    WorkerConfiguration.Parse(configFileName);
 
-    LOG(LOG_INFO) << managerConfiguration.GetProperty(ConfigurationKey::PresidentHost);
-    LOG(LOG_INFO) << managerConfiguration.GetIntegerProperty(ConfigurationKey::PresidentPort);
-    LOG(LOG_INFO) << managerConfiguration.GetProperty(ConfigurationKey::ManagerHost);
-    LOG(LOG_INFO) << managerConfiguration.GetIntegerProperty(ConfigurationKey::ManagerPort);
+    LOG(LOG_INFO) << WorkerConfiguration.GetProperty(ConfigurationKey::MasterHost);
+    LOG(LOG_INFO) << WorkerConfiguration.GetIntegerProperty(ConfigurationKey::MasterPort);
+    LOG(LOG_INFO) << WorkerConfiguration.GetProperty(ConfigurationKey::WorkerHost);
+    LOG(LOG_INFO) << WorkerConfiguration.GetIntegerProperty(ConfigurationKey::WorkerPort);
 
-    dcvl::service::Manager manager(managerConfiguration);
-    manager.JoinPresident([&manager](const dcvl::message::Response& response) {
+    dcvl::service::Worker Worker(WorkerConfiguration);
+    Worker.JoinMaster([&Worker](const dcvl::message::Response& response) {
         if ( response.GetStatus() != dcvl::message::Response::Status::Successful ) {
-            LOG(LOG_ERROR) << "Can't join president.";
+            LOG(LOG_ERROR) << "Can't join Master.";
             LOG(LOG_ERROR) << "Exit with failure.";
 
             exit(EXIT_FAILURE);
@@ -61,6 +61,6 @@ void StartManager(const std::string& configFileName) {
             LOG(LOG_INFO) << "Join successfully";
         }
 
-        manager.StartListen();
+        Worker.StartListen();
     });
 }
