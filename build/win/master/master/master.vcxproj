@@ -34,6 +34,11 @@
     <ClCompile Include="..\..\..\..\src\dcvl\tool\StartMaster.cpp" />
     <ClCompile Include="..\..\..\..\src\dcvl\topology\Topology.cpp" />
     <ClCompile Include="..\..\..\..\src\dcvl\topology\TopologyLoader.cpp" />
+    <ClCompile Include="..\..\..\..\src\dcvl\util\Configuration.cpp" />
+    <ClCompile Include="..\..\..\..\src\dcvl\util\NetConnector.cpp" />
+    <ClCompile Include="..\..\..\..\src\dcvl\util\NetListener.cpp" />
+    <ClCompile Include="..\..\..\..\src\dcvl\util\Socket.cpp" />
+    <ClCompile Include="..\..\..\..\src\dcvl\util\StringUtil.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{FB832A1F-45FB-49A5-A1CD-EBC22B0C2E80}</ProjectGuid>
