@@ -27,7 +27,7 @@
 #include <vector>
 #include "dcvl/base/ByteArray.h"
 #include "dcvl/base/Variant.h"
-
+#include <cereal/archives/binary.hpp>
 namespace dcvl {
     namespace base {
         class Writable {
@@ -190,7 +190,7 @@ namespace dcvl {
 
         //extern std::map<int8_t, std::shared_ptr<Writable>> Writables;
         std::map<int8_t, std::shared_ptr<Writable>>& GetWritables();
-
+#if 1
         class DataPackage {
         public:
             DataPackage() : _version(0) {}
@@ -277,6 +277,61 @@ namespace dcvl {
             int32_t _length;
             std::vector<Variant> _variants;
         };
+#else
+		class TuplePackage{
+		public:
+			TuplePackage(unsigned char* _data, int _type, int _cols, int _rows, int _stride,bool _continuous):
+				data(_data),type(_type),cols(_cols),rows(_rows),stride(_stride),continuous(_continuous) {}
+			template<class Archive>
+			void Serialize(Archive& ar)
+			{
+				
+				ar & type & rows & cols & stride & continuous;
 
+				if (continuous) {
+					const int data_size = rows * cols * type;
+					auto mat_data = cereal::binary_data(data, data_size);
+					ar & mat_data;
+				}
+				else {
+					const int row_size = cols * type;
+					for (int i = 0; i < rows; i++) {
+						auto row_data = cereal::binary_data(data+i*stride*type, row_size);
+						ar & row_data;
+					}
+				}
+			};
+
+			template<class Archive>
+			void DeSerialize(Archive& ar)
+			{
+				
+				ar & type & rows & cols & stride & continuous;
+
+				if (continuous) {
+					const int data_size = rows * cols * type;
+					data = new unsigned char[data_size];
+					auto mat_data = cereal::binary_data(data, data_size);
+					ar & mat_data;
+				}
+				else {
+					const int data_size = rows * stride * type;
+					data = new unsigned char[data_size];
+					const int row_size = cols * type;
+					for (int i = 0; i < rows; i++) {
+						auto row_data = cereal::binary_data(data + i*stride*type, row_size);
+						ar & row_data;
+					}
+				}
+			};
+		private:
+			unsigned char*data;
+			int type;
+			int cols;
+			int rows;
+			int stride;
+			bool continuous;
+		};
+#endif
     }
 }

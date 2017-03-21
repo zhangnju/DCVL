@@ -23,7 +23,7 @@
 #include <string>
 
 using namespace std;
-
+bool IsMaster(dcvl::util::Configuration MasterConfigratuion);
 void StartMaster(const std::string& configFileName);
 
 int main(int argc, char* argv[])
@@ -37,10 +37,19 @@ int main(int argc, char* argv[])
     return EXIT_SUCCESS;
 }
 
+bool IsMaster(dcvl::util::Configuration MasterConfigratuion)
+{
+	//get the local IP 
+	//compare the local IP with the setting of master IP
+}
 void StartMaster(const std::string& configFileName) {
     dcvl::util::Configuration MasterConfigratuion;
     MasterConfigratuion.Parse(configFileName);
 
-    dcvl::service::Master Master(MasterConfigratuion);
-    Master.StartListen();
+	if (IsMaster(MasterConfigratuion))
+	{
+		dcvl::service::Master Master(MasterConfigratuion);
+		Master.StartListen();
+	}
+	return;
 }

@@ -37,7 +37,11 @@ int main(int argc, char* argv[])
 
     return EXIT_SUCCESS;
 }
-
+bool IsWorker(dcvl::util::Configuration WorkerConfiguration)
+{
+	//get the local IP 
+	//compare the local IP with the setting of worker IP
+}
 void StartWorker(const std::string& configFileName) {
     using dcvl::ConfigurationKey;
 
@@ -49,18 +53,22 @@ void StartWorker(const std::string& configFileName) {
     LOG(LOG_INFO) << WorkerConfiguration.GetProperty(ConfigurationKey::WorkerHost);
     LOG(LOG_INFO) << WorkerConfiguration.GetIntegerProperty(ConfigurationKey::WorkerPort);
 
-    dcvl::service::Worker Worker(WorkerConfiguration);
-    Worker.JoinMaster([&Worker](const dcvl::message::Response& response) {
-        if ( response.GetStatus() != dcvl::message::Response::Status::Successful ) {
-            LOG(LOG_ERROR) << "Can't join Master.";
-            LOG(LOG_ERROR) << "Exit with failure.";
+	if (IsWorker(WorkerConfiguration))
+	{
+		dcvl::service::Worker Worker(WorkerConfiguration);
+		Worker.JoinMaster([&Worker](const dcvl::message::Response& response) {
+			if (response.GetStatus() != dcvl::message::Response::Status::Successful) {
+				LOG(LOG_ERROR) << "Can't join Master.";
+				LOG(LOG_ERROR) << "Exit with failure.";
 
-            exit(EXIT_FAILURE);
-        }
-        else {
-            LOG(LOG_INFO) << "Join successfully";
-        }
+				exit(EXIT_FAILURE);
+			}
+			else {
+				LOG(LOG_INFO) << "Join successfully";
+			}
 
-        Worker.StartListen();
-    });
+			Worker.StartListen();
+		});
+	}
+	return;
 }
