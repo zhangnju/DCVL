@@ -23,19 +23,26 @@ def GetLocalIP():
     except socket.error:
         return "127.0.0.1"
 
+#here define a simple Toplogy to test
+def ParseToplogy(toplogy):
+    #info=[name,spout_count,bolt0_count,bolt1_count]
+    info=pickle.loads(toplogy)
+    return info
+
 #Function for handling connections. This will be used to create threads
 def clientthread(conn):
     #Sending message to connected client
-    conn.send('Welcome to the server. Type something and hit enter\n') 
+    #conn.send('Welcome to the server. Type something and hit enter\n') 
      
     #infinite loop so that function do not terminate and thread do not end.
     while True:
         #Receiving from client
         data = conn.recv(BUFSIZ)
-        reply = 'OK...' + data
-        if not data: 
-            break
-        conn.sendall(reply)
+        data_type=pickle.loads(data)
+        if data_type is 'toplogy':
+           data = conn.recv(BUFSIZ) 
+           ParseToplogy(data)
+        conn.sendall('OK')
     conn.close()
 
 #parse the config file, and then start master/worker

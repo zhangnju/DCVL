@@ -1,23 +1,24 @@
 #!/usr/bin/env python
 
-from socket import *
+import socket
+try:
+   import cPickle as pickle
+except:
+   import pickle
 
-HOST = 'localhost'
-PORT = 21567
-BUFSIZ = 1024
-ADDR = (HOST, PORT)
+#here define a simple Toplogy to test
+def GenToplogy(name,spout_count,bolt0_count,bolt1_count):
+    info=[name,spout_count,bolt0_count,bolt1_count]
+    toplogy=pickle.dumps(info)
+    return toplogy
 
-tcpCliSock = socket(AF_INET, SOCK_STREAM)
-tcpCliSock.connect(ADDR)
-
-while True:
-    data = raw_input('> ')#check me
-    if not data:
-        break
-    tcpCliSock.send(data)
-    data = tcpCliSock.recv(BUFSIZ)
-    if not data:
-        break
-    print data
-
-tcpCliSock.close()
+def SubmitToplogy(host,port,toplogy):
+    data_type=pickle.dumps('toplogy')
+    BUFSIZ = 1024
+    ADDR = (host, port)
+    tcpCliSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcpCliSock.connect(ADDR)
+    tcpCliSock.send(data_type)
+    tcpCliSock.send(toplogy)
+    status = tcpCliSock.recv(BUFSIZ)
+    tcpCliSock.close()
