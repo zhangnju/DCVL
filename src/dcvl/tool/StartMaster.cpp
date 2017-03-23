@@ -41,6 +41,7 @@ bool IsMaster(dcvl::util::Configuration MasterConfigratuion)
 {
 	//get the local IP 
 	//compare the local IP with the setting of master IP
+	return true;
 }
 void StartMaster(const std::string& configFileName) {
     dcvl::util::Configuration MasterConfigratuion;

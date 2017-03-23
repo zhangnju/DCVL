@@ -17,7 +17,7 @@
  */
 
 #include "dcvl/util/NetConnector.h"
-
+#include "dcvl/util/Mpi_net.h"
 #include <iostream>
 
 namespace dcvl {
