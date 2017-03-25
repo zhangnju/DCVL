@@ -2,7 +2,7 @@
 #define DCL_NET_ZMQ_NET_H_
 
 #include "dcvl/util/Net.h"
-#include "dcvl/base/Message.h"
+#include "dcvl/message/Message.h"
 
 #include <limits>
 #include <thread>

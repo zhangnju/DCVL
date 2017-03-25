@@ -2,7 +2,7 @@
 #define DCVL_NET_H_
 
 #include <string>
-#include "dcvl/base/Message.h"
+#include "dcvl/message/Message.h"
 namespace dcvl {
 
 enum NetThreadLevel {

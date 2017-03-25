@@ -1,139 +1,106 @@
-/**
- * licensed to the apache software foundation (asf) under one
- * or more contributor license agreements.  see the notice file
- * distributed with this work for additional information
- * regarding copyright ownership.  the asf licenses this file
- * to you under the apache license, version 2.0 (the
- * "license"); you may not use this file except in compliance
- * with the license.  you may obtain a copy of the license at
- *
- * http://www.apache.org/licenses/license-2.0
- *
- * unless required by applicable law or agreed to in writing, software
- * distributed under the license is distributed on an "as is" basis,
- * without warranties or conditions of any kind, either express or implied.
- * see the license for the specific language governing permissions and
- * limitations under the license.
- */
+#ifndef DCVL_MESSAGE_H_
+#define DCVL_MESSAGE_H_
 
-#pragma once
-
-#include "dcvl/base/BlockingQueue.h"
-#include "dcvl/base/Variant.h"
-#include <iostream>
-#include <thread>
 #include <functional>
-#include <map>
-#include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace dcvl {
-    namespace message {
-        class Message {
-        public:
-            Message(int32_t type) : _type(type) {
-            }
 
-            Message(int32_t type, const base::Variants& arguments) :
-                    _type(type), _arguments(arguments) {
-            }
+enum MsgType {
+      Invalid = 0,
+      Join,
+      Heartbeat,
+      SyncMetadata,
+      SendTuple,
+      AskField
+};
+class Blob {
+public:
+	Blob() : data_(nullptr), size_(0) {}
+	Blob(size_t size) : size_(size) {
+		data_ = AlignMalloc(size);
+	}
+	Blob(char* data,size_t size) : size_(size) {
+		data_ = AlignMalloc(size);
+		memcpy(data_, data, size);
+	}
+	~Blob() {
+		if (data_ != nullptr) {
+			AlignFree(data_);
+		}
+	}
+	inline char* data() const { return data_; }
+	inline size_t size() const { return size_; }
 
-            int32_t GetType() const {
-                return _type;
-            }
+private:
+	// Memory is shared and auto managed
+	char *data_;
+	size_t size_;
+	inline char* AlignMalloc(size_t size) {
+#ifdef _MSC_VER 
+		return (char*)_aligned_malloc(size, 16);
+#else
+		void *data;
+		posix_memalign(&data,16, size);
+		return (char*)data;
+#endif
+	}
 
-            void SetType(int32_t type) {
-                _type = type;
-            }
+	inline void AlignFree(char *data) {
+#ifdef _MSC_VER 
+		_aligned_free(data);
+#else
+		free(data);
+#endif
+	}
+};
+class Message {
+public:
+  MsgType type() const { return static_cast<MsgType>(header_[2]); }
+  inline int src() const { return header_[0]; }
+  inline int dst() const { return header_[1]; }
+  inline int table_id() const { return header_[3]; }
+  inline int msg_id() const { return header_[4]; }
 
-            const base::Variants& GetArguments() const {
-                return _arguments;
-            }
+  inline void set_type(MsgType type) { header_[2] = static_cast<int>(type); }
+  inline void set_src(int src) { header_[0] = src; }
+  inline void set_dst(int dst) { header_[1] = dst; }
+  inline void set_table_id(int table_id) { header_[3] = table_id; }
+  inline void set_msg_id(int msg_id) { header_[4] = msg_id; }
 
-            void SetArguments(const base::Variants& arguments) {
-                _arguments = arguments;
-            }
+  inline void set_data(const std::vector<Blob>& data) { 
+    data_ = std::move(data); }
+  inline std::vector<Blob>& data() { return data_; }
+  inline size_t size() const { return data_.size(); }
 
-        private:
-            int32_t _type;
-            base::Variants _arguments;
-        };
+  inline int* header() { return header_; }
+  inline const int* header() const { return header_; }
+  static const int kHeaderSize = 8 * sizeof(int);
 
-        class MessageQueue: public base::BlockingQueue<Message*> {
-        };
+  // Create a Message with only headers
+  // The src/dst, type is opposite with src message
+  inline Message* CreateReplyMessage() {
+    Message* reply = new Message();
+    reply->set_dst(this->src());
+    reply->set_src(this->dst());
+    reply->set_type(static_cast<MsgType>(-header_[2]));
+    reply->set_table_id(this->table_id());
+    reply->set_msg_id(this->msg_id());
+    return reply;
+  }
 
-        class MessageLoop {
-        public:
-            typedef std::function<void(Message&)> MessageHandler;
+  inline void Push(const Blob& blob) { data_.push_back(blob); }
 
-            MessageLoop() {
-            }
+private:
+  int header_[8];
+  std::vector<Blob> data_;
+};
 
-            MessageLoop(const MessageLoop&) = delete;
-            const MessageLoop& operator=(const MessageLoop&) = delete;
+//typedef std::unique_ptr<Message> MessagePtr;
+typedef std::shared_ptr<Message> MessagePtr;
 
-            template <class ObjectType, class MethodType>
-            void MessageMap(int32_t messageType, ObjectType* self, MethodType method) {
-                MessageMap(messageType, std::bind(method, self, std::placeholders::_1));
-            }
+}  // namespace multiverso
 
-            void MessageMap(int32_t messageType, MessageHandler handler) {
-                _messageHandlers.insert({ messageType, handler });
-            }
-
-            void Run() {
-                Message* msg = nullptr;
-
-                while ( true ) {
-                    _messageQueue.Pop(msg);
-                    if ( msg ) {
-                        auto handler = _messageHandlers.find(msg->GetType());
-
-                        if ( handler != _messageHandlers.end() ) {
-                            handler->second(*msg);
-                        }
-
-                        delete msg;
-                    }
-                }
-            }
-
-            void PostMessage(Message* message) {
-                _messageQueue.Push(message);
-            }
-
-        private:
-            std::map<int32_t, MessageHandler> _messageHandlers;
-            MessageQueue _messageQueue;
-        };
-
-        class MessageLoopManager {
-        public:
-            static MessageLoopManager& GetInstance() {
-                static MessageLoopManager manager;
-
-                return manager;
-            }
-
-            MessageLoopManager(const MessageLoopManager&) = delete;
-            const MessageLoopManager& operator=(const MessageLoopManager&) = delete;
-
-            void Register(const std::string& name, MessageLoop* loop) {
-                _messageLoops.insert({ name, std::shared_ptr<MessageLoop>(loop) });
-            }
-
-            void PostMessage(const std::string& name, Message* message) {
-                auto messageLoopPair = _messageLoops.find(name);
-                if ( messageLoopPair != _messageLoops.end() ) {
-                    messageLoopPair->second->PostMessage(message);
-                }
-            }
-
-        private:
-            MessageLoopManager() {}
-
-            std::map<std::string, std::shared_ptr<MessageLoop>> _messageLoops;
-        };
-    }
-}
-
+#endif  // MULTIVERSO_MESSAGE_H_
