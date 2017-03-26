@@ -1,6 +1,6 @@
 #include "dcvl/service/Master.h"
-#include "dcvl/util/NetConnector.h"
-#include "dcvl/message/CommandClient.h"
+#include "dcvl/util/Net.h"
+#include "dcvl/message/Message.h"
 #include "dcvl/util/Configuration.h"
 #include "dcvl/topology/Topology.h"
 #include "dcvl/topology/TopologyLoader.h"
@@ -16,7 +16,6 @@
 namespace dcvl {
     namespace service {
         Master::Master(const dcvl::base::NetAddress& host) : 
-                CommandServer(new dcvl::util::NetListener(host)),
                 _MasterHost(host),
                 _WorkerCount(0) {
             OnConnection(std::bind(&Master::OnConnect, this, std::placeholders::_1));

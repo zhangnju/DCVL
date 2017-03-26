@@ -15,7 +15,7 @@ class NetInterface {
 public:
   static NetInterface* Get();
 
-  virtual void Init(int* argc = nullptr, char** argv = nullptr) = 0;
+  virtual void Init(bool IsMatser) = 0;
 
   virtual void Finalize() = 0;
 

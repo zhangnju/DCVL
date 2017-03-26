@@ -3,26 +3,24 @@
 
 #include "dcvl/util/Net.h"
 #include "dcvl/message/Message.h"
-
+#include <iostream>
 #include <limits>
 #include <thread>
 #include <zmq.h>
 #include <unordered_set>
 namespace dcvl {
 
-//MV_DEFINE_string(machine_file, "", "path of machine file");
-//MV_DEFINE_int(port, 55555 , "port used to communication");
-
 class ZMQNetWrapper : public NetInterface {
 public:
-  void Init(int* argc, char** argv) override {
+#if 0
+  void Init(bool IsMaster) override {
     // get machine file 
     if (active_) return;
     //ParseMachineFile(MV_CONFIG_machine_file, &machine_lists_);
 	//parse config file
-	int port = 55555;// MV_CONFIG_port;
+	//int port = 55555;// MV_CONFIG_port;
 
-    size_ = static_cast<int>(machine_lists_.size());
+    //size_ = static_cast<int>(machine_lists_.size());
    // CHECK(size_ > 0);
     std::unordered_set<std::string> local_ip;
    // net::GetLocalIPAddress(&local_ip);
@@ -51,7 +49,28 @@ public:
     active_ = true;
 	std::cout << name().c_str() << "net util inited, rank =" << rank() << ", size = " << size() << std::endl;
   }
+#else
+	//before Init function, we should check local IP addr and then set the flag of IsMatser
+	//for master node, it will be set REP mode
+	//for worker node, the command channel wil be set REQ mode, and the data channel will be
+	//set PUSH/PULL mode
+	void Init(bool IsMaster) override {
+		if (active_) return;
+		context_ = zmq_ctx_new();
+		zmq_ctx_set(context_, ZMQ_MAX_SOCKETS, 256);
+ 
+		if (IsMaster)
+		{
+			zmq::socket_t master_socket(context, ZMQ_REP);
+			zmq_socket(context_, ZMQ_REP);
+			master_socket.bind("tcp://*:5555");
 
+		}
+		else
+		{
+		}
+	}
+#endif
   virtual int Bind(int rank, char* endpoint) override {
     rank_ = rank;
     std::string ip_port(endpoint);
@@ -256,7 +275,8 @@ protected:
   };
 
   Entity receiver_;
-  std::vector<Entity> senders_;
+  Entity sender_;
+  //std::vector<Entity> senders_;
 
   int rank_;
   int size_;
