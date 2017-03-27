@@ -15,7 +15,7 @@ class NetInterface {
 public:
   static NetInterface* Get();
 
-  virtual void Init(bool IsMatser) = 0;
+  virtual void Init(std::string conf) = 0;
 
   virtual void Finalize() = 0;
 

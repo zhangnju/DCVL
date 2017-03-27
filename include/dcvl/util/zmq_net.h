@@ -2,12 +2,15 @@
 #define DCL_NET_ZMQ_NET_H_
 
 #include "dcvl/util/Net.h"
+#include "dcvl/util/StringUtil.h"
 #include "dcvl/message/Message.h"
+#include <fstream>
 #include <iostream>
+#include <vector>
 #include <limits>
 #include <thread>
 #include <zmq.h>
-#include <unordered_set>
+#include <unordered_map>
 namespace dcvl {
 
 class ZMQNetWrapper : public NetInterface {
@@ -54,20 +57,25 @@ public:
 	//for master node, it will be set REP mode
 	//for worker node, the command channel wil be set REQ mode, and the data channel will be
 	//set PUSH/PULL mode
-	void Init(bool IsMaster) override {
+	void Init(std::string conf) override {
 		if (active_) return;
 		context_ = zmq_ctx_new();
 		zmq_ctx_set(context_, ZMQ_MAX_SOCKETS, 256);
  
 		if (IsMaster)
 		{
-			zmq::socket_t master_socket(context, ZMQ_REP);
-			zmq_socket(context_, ZMQ_REP);
-			master_socket.bind("tcp://*:5555");
-
+			receiver_.socket=zmq_socket(context_, ZMQ_REP);
+			receiver_.endpoint = ip_addr + ":" + port;
+			int rc = zmq_bind(receiver_.socket, ("tcp://" + receiver_.endpoint).c_str());
+			
 		}
 		else
 		{
+			sender_[0].socket = zmq_socket(context_, ZMQ_REQ);
+			sender_[0].endpoint = ip_addr + ":" + port;
+			int rc = zmq_connect(sender_[0].socket, ("tcp://" + sender_[0].endpoint).c_str());
+
+
 		}
 	}
 #endif
@@ -244,27 +252,45 @@ public:
   }
 
 protected:
-  void ParseMachineFile(std::string filename, 
-                        std::vector<std::string>* result) {
-    //CHECK_NOTNULL(result);
-    FILE* file;
-    char str[32];
-    int i = 0;
-#ifdef _MSC_VER
-    fopen_s(&file, filename.c_str(), "r");
-#else
-    file = fopen(filename.c_str(), "r");
-#endif
-    //CHECK_NOTNULL(file);
-#ifdef _MSC_VER
-    while (fscanf_s(file, "%s", &str, 32) > 0) {
-#else
-    while (fscanf(file, "%s", &str) > 0) {
-#endif
-      result->push_back(str);
-    }
-    fclose(file);
-  }
+	//config file:
+	//master: ip_addr/port
+	//worker: ip_addr/port
+	//spout:  ip_addr/port
+	//bolt0:  ip_addr/port
+	//bolt1:  ip_addr/port
+	//worker size/master size can determine the size of every node group
+	const char ITEM_SPLITTER = '=';
+	void ParseConfigFile(std::string filename,
+		std::unordered_map<std::string,std::vector<std::string>> &result) {
+		std::ifstream inputFile(filename.c_str());
+
+		while (!inputFile.eof()) {
+			std::string line;
+			std::getline(inputFile, line);
+
+			if (inputFile.eof()) {
+				break;
+			}
+
+			if (line.empty()) {
+				continue;
+			}
+
+			std::vector<std::string> words = SplitString(line, ITEM_SPLITTER);
+			std::string propertyName = TrimString(words[0]);
+			std::string propertyValue = TrimString(words[1]);
+
+			std::unordered_map<std::string, std::vector<std::string>>::const_iterator item = result.find(propertyName);
+			if (item == result.end())
+			{
+				result.insert(std::make_pair(propertyName, std::vector<std::string>(1, propertyValue)));
+			}
+			else
+			{
+				result[propertyName].push_back(propertyValue);
+			}
+		}
+		}
 
   bool active_;
   void* context_;
@@ -275,12 +301,13 @@ protected:
   };
 
   Entity receiver_;
-  Entity sender_;
+  Entity sender_[3];
   //std::vector<Entity> senders_;
 
   int rank_;
   int size_;
   std::vector<std::string> machine_lists_;
+  std::unordered_map<std::string, std::vector<std::string>> config;
 };
 } 
 
