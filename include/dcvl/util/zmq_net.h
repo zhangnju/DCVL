@@ -3,6 +3,7 @@
 
 #include "dcvl/util/Net.h"
 #include "dcvl/util/StringUtil.h"
+#include "dcvl/util/Net_util.h"
 #include "dcvl/message/Message.h"
 #include <fstream>
 #include <iostream>
@@ -11,6 +12,7 @@
 #include <thread>
 #include <zmq.h>
 #include <unordered_map>
+#include <string.h>
 namespace dcvl {
 
 class ZMQNetWrapper : public NetInterface {
@@ -59,20 +61,47 @@ public:
 	//set PUSH/PULL mode
 	void Init(std::string conf) override {
 		if (active_) return;
+		bool IsMaster = false;
+		ParseConfigFile(conf, conf_table);
+
+		std::string ip_port;
+		std::vector<std::string> local_ip;
+		net::GetLocalIPAddress(&local_ip);
+		//here only one IP addr is assumed 
+		for (int i = 0; i < conf_table["maseter"].size(); i++)
+		{
+			if (strstr(conf_table["maseter"].at(i).c_str(), local_ip[0].c_str()) != NULL)
+			{
+				IsMaster = true;
+				ip_port = conf_table["maseter"].at(i);
+				break;
+			}
+		}
 		context_ = zmq_ctx_new();
 		zmq_ctx_set(context_, ZMQ_MAX_SOCKETS, 256);
  
 		if (IsMaster)
 		{
 			receiver_.socket=zmq_socket(context_, ZMQ_REP);
-			receiver_.endpoint = ip_addr + ":" + port;
+			receiver_.endpoint = ip_port;
 			int rc = zmq_bind(receiver_.socket, ("tcp://" + receiver_.endpoint).c_str());
 			
 		}
 		else
 		{
+			int group_size = conf_table["worker"].size() / conf_table["master"].size();
+			std::string master_ip;
+			for (int i = 0; i < conf_table["worker"].size(); i++)
+			{
+				if (strstr(conf_table["worker"].at(i).c_str(), local_ip[0].c_str()) != NULL)
+				{
+					ip_port = conf_table["worker"].at(i);
+					master_ip = conf_table["master"].at(i / group_size);
+					break;
+				}
+			}
 			sender_[0].socket = zmq_socket(context_, ZMQ_REQ);
-			sender_[0].endpoint = ip_addr + ":" + port;
+			sender_[0].endpoint = master_ip;
 			int rc = zmq_connect(sender_[0].socket, ("tcp://" + sender_[0].endpoint).c_str());
 
 
@@ -307,7 +336,7 @@ protected:
   int rank_;
   int size_;
   std::vector<std::string> machine_lists_;
-  std::unordered_map<std::string, std::vector<std::string>> config;
+  std::unordered_map<std::string, std::vector<std::string>> conf_table;
 };
 } 
 
