@@ -1,5 +1,5 @@
 #include "dcvl/service/Master.h"
-#include "dcvl/util/Net.h"
+#include "dcvl/util/ZmqNet.h"
 #include "dcvl/message/Message.h"
 #include "dcvl/util/Configuration.h"
 #include "dcvl/topology/Topology.h"

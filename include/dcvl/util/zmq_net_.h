@@ -3,7 +3,7 @@
 
 #include "dcvl/util/Net.h"
 #include "dcvl/util/StringUtil.h"
-#include "dcvl/util/Net_util.h"
+#include "dcvl/util/NetUtil.h"
 #include "dcvl/message/Message.h"
 #include <fstream>
 #include <iostream>
@@ -17,18 +17,14 @@ namespace dcvl {
 
 class ZMQNetWrapper : public NetInterface {
 public:
-#if 0
-  void Init(bool IsMaster) override {
-    // get machine file 
+#if 1
+  void Init(std::string conf) override {
     if (active_) return;
-    //ParseMachineFile(MV_CONFIG_machine_file, &machine_lists_);
-	//parse config file
-	//int port = 55555;// MV_CONFIG_port;
+	ParseConfigFile(conf, conf_table);
 
-    //size_ = static_cast<int>(machine_lists_.size());
-   // CHECK(size_ > 0);
-    std::unordered_set<std::string> local_ip;
-   // net::GetLocalIPAddress(&local_ip);
+	std::string ip_port;
+	std::vector<std::string> local_ip;
+	net::GetLocalIPAddress(&local_ip);
 
     context_ = zmq_ctx_new();
     zmq_ctx_set(context_, ZMQ_MAX_SOCKETS, 256);
@@ -64,6 +60,7 @@ public:
 		bool IsMaster = false;
 		ParseConfigFile(conf, conf_table);
 
+		
 		std::string ip_port;
 		std::vector<std::string> local_ip;
 		net::GetLocalIPAddress(&local_ip);
@@ -100,26 +97,76 @@ public:
 					break;
 				}
 			}
-			sender_[0].socket = zmq_socket(context_, ZMQ_REQ);
+			sender_[0].socket = zmq_socket(context_, ZMQ_REQ);//communicate with matser node
 			sender_[0].endpoint = master_ip;
 			int rc = zmq_connect(sender_[0].socket, ("tcp://" + sender_[0].endpoint).c_str());
 
+			bool IsSpout=false;
+			for (int i = 0; i < conf_table["spout"].size(); i++)
+			{
+				if (strstr(conf_table["spout"].at(i).c_str(), local_ip[0].c_str()) != NULL)
+				{
+					ip_port = conf_table["spout"].at(i);
+					IsSpout = true;
+					break;
+				}
+			}
+			if (IsSpout)
+			{
+				sender_[1].socket = zmq_socket(context_, ZMQ_PUSH);//communicate with next level bolt node
+				sender_[1].endpoint = ip_port;
+				int rc = zmq_bind(sender_[1].socket, ("tcp://" + sender_[1].endpoint).c_str());
+				sender_[2].socket = nullptr;
+				sender_[2].endpoint = "";
+			}
+			else
+			{
+				bool IsLastBolt = false;
+				for (int i = 0; i < conf_table["bolt1"].size(); i++)
+				{
+					if (strstr(conf_table["bolt1"].at(i).c_str(), local_ip[0].c_str()) != NULL)
+					{
+						ip_port = conf_table["bolt1"].at(i);
+						IsLastBolt = true;
+						break;
+					}
+				}
 
+				if (IsLastBolt)
+				{
+					sender_[1].socket = zmq_socket(context_, ZMQ_PULL);//communicate with last level bolt node
+					sender_[1].endpoint = ip_port;
+					int rc = zmq_bind(sender_[1].socket, ("tcp://" + sender_[1].endpoint).c_str());
+					sender_[2].socket = nullptr;
+					sender_[2].endpoint = "";
+				}
+				else
+				{
+					sender_[1].socket = zmq_socket(context_, ZMQ_PULL);//communicate with last level bolt node
+					sender_[1].endpoint = "";
+					int rc = zmq_connect(sender_[1].socket, ("tcp://" + sender_[1].endpoint).c_str());
+					sender_[2].socket = zmq_socket(context_, ZMQ_PUSH);//communicate with next level bolt node
+					sender_[2].endpoint = "";
+					rc = zmq_connect(sender_[2].socket, ("tcp://" + sender_[2].endpoint).c_str());
+				}
+			}
 		}
+		active_ = true;
 	}
 #endif
+
   virtual int Bind(int rank, char* endpoint) override {
-    rank_ = rank;
+    receiver_rank_ = rank;
     std::string ip_port(endpoint);
     if (context_ == nullptr) { 
       context_ = zmq_ctx_new(); 
     }
     if(context_==NULL)
 		return -1;
-    if (receiver_.socket == nullptr) 
-      receiver_.socket = zmq_socket(context_, ZMQ_DEALER);
-    receiver_.endpoint = ip_port;
-    int rc = zmq_bind(receiver_.socket, ("tcp://" + receiver_.endpoint).c_str());
+	if (receivers_[receiver_rank_].socket == nullptr)
+		receivers_[receiver_rank_].socket = zmq_socket(context_, ZMQ_DEALER);
+	receivers_[receiver_rank_].endpoint = ip_port;
+	int rc = zmq_bind(receivers_[receiver_rank_].socket, ("tcp://" + receivers_[receiver_rank_].endpoint).c_str());
     if (rc == 0) {
       int linger = 0;
       return 0;
@@ -130,21 +177,15 @@ public:
     }
   }
 
-  // Connect with other endpoints
+  // Connect with other endpoints,just for senders
   virtual int Connect(int* ranks, char* endpoints[], int size) override {
-    if(receiver_.socket==NULL)
-		return -1;
     if(context_==NULL)
 		return -1;
-    size_ = size;
-    senders_.resize(size_);
+    sender_size_ = size;
+    senders_.resize(size);
     for (auto i = 0; i < size; ++i) {
       int rank = ranks[i];
       std::string ip_port(endpoints[i]);
-      if (ip_port == receiver_.endpoint) {
-        rank_ = rank;
-        continue;
-      }
       senders_[rank].socket = zmq_socket(context_, ZMQ_DEALER);
       senders_[rank].endpoint = ip_port;
       int rc = zmq_connect(senders_[rank].socket, ("tcp://" + senders_[rank].endpoint).c_str());
@@ -159,19 +200,26 @@ public:
 
   void Finalize() override {
     for (auto i = 0; i < senders_.size(); ++i) {
-      if (i != rank_) {
+      if (i != sender_rank_) {
         int linger = 0;
         zmq_setsockopt(senders_[i].socket, ZMQ_LINGER, &linger, sizeof(linger));
         int rc = zmq_close(senders_[i].socket);
         if (rc != 0) {
-			std::cout << "rc =" << rc << ", i = " << i << ", rank =" << rank_ << std::endl;
+			std::cout << "rc =" << rc << ", i = " << i << ", rank =" << sender_rank_ << std::endl;
         }
       }
     }
-    int linger = 0;
-    zmq_setsockopt(receiver_.socket, ZMQ_LINGER, &linger, sizeof(linger));
-    zmq_close(receiver_.socket);
-
+	for (auto i = 0; i < receivers_.size(); ++i) {
+		if (i != receiver_rank_) {
+			int linger = 0;
+			zmq_setsockopt(receivers_[i].socket, ZMQ_LINGER, &linger, sizeof(linger));
+			int rc = zmq_close(receivers_[i].socket);
+			if (rc != 0) {
+				std::cout << "rc =" << rc << ", i = " << i << ", rank =" << sender_rank_ << std::endl;
+			}
+		}
+	}
+   
     std::cout<<"zmq finalize: before close context"<<std::endl;
     zmq_ctx_shutdown(context_);
     //CHECK_NOTNULL(context_);
@@ -181,8 +229,20 @@ public:
   }
 
   bool active() const override { return active_; }
-  int rank() const override { return rank_; }
-  int size() const override { return size_; }
+  int rank(bool IsSender) const override 
+  { 
+	  if (IsSender) 
+		  return sender_rank_;
+	  else
+		  return receiver_rank_; 
+  }
+  int size(bool IsSender) const override 
+  { 
+	  if (IsSender) 
+		  return sender_size_; 
+	  else 
+		  return receiver_size_; 
+  }
   std::string name() const override { return "ZeroMQ"; }
 
   int Send(MessagePtr& msg) override {
@@ -211,7 +271,7 @@ public:
     return size;
   }
 
-  int Recv(MessagePtr* msg_ptr) override {
+  int Recv(int rank_,MessagePtr* msg_ptr) override {
     if (!msg_ptr->get()) msg_ptr->reset(new Message());
     int size = 0;
     int recv_size;
@@ -224,25 +284,25 @@ public:
     MessagePtr& msg = *msg_ptr;
     msg->data().clear();
     //CHECK(msg.get());
-    recv_size = zmq_recv(receiver_.socket, msg->header(), Message::kHeaderSize, ZMQ_DONTWAIT);
+    recv_size = zmq_recv(receivers_[rank_].socket, msg->header(), Message::kHeaderSize, ZMQ_DONTWAIT);
     if (recv_size < 0) { return -1; }
     //CHECK(Message::kHeaderSize == recv_size);
 
     size += recv_size;
-    zmq_getsockopt(receiver_.socket, ZMQ_RCVMORE, &more, &more_size);
+    zmq_getsockopt(receivers_[rank_].socket, ZMQ_RCVMORE, &more, &more_size);
 
     while (more) {
-      recv_size = zmq_recv(receiver_.socket, &blob_size, sizeof(size_t), 0);
+      recv_size = zmq_recv(receivers_[rank_].socket, &blob_size, sizeof(size_t), 0);
       //CHECK(recv_size == sizeof(size_t));
       size += recv_size;
-      zmq_getsockopt(receiver_.socket, ZMQ_RCVMORE, &more, &more_size);
+      zmq_getsockopt(receivers_[k].socket, ZMQ_RCVMORE, &more, &more_size);
       //CHECK(more);
       Blob blob(blob_size);
-      recv_size = zmq_recv(receiver_.socket, blob.data(), blob.size(), 0);
+      recv_size = zmq_recv(receivers_[rank_].socket, blob.data(), blob.size(), 0);
       //CHECK(recv_size == blob_size);
       size += recv_size;
       msg->Push(blob);
-      zmq_getsockopt(receiver_.socket, ZMQ_RCVMORE, &more, &more_size);
+      zmq_getsockopt(receivers_[rank_].socket, ZMQ_RCVMORE, &more, &more_size);
     }
     return size;
   }
@@ -257,11 +317,11 @@ public:
     }
   }
 
-  void RecvFrom(int, char* buf, int len) const override {
+  void RecvFrom(int recv_rank, char* buf, int len) const override {
     // note: rank is not used here
     int recv_size = 0;
     while (recv_size < len) {
-      int cur_size = zmq_recv(receiver_.socket, buf + recv_size, len - recv_size, 0);
+      int cur_size = zmq_recv(receivers_[rank].socket, buf + recv_size, len - recv_size, 0);
 	  if (cur_size < 0) { std::cout << "socket receive error" << cur_size << std::endl; }
       recv_size += cur_size;
     }
@@ -329,13 +389,16 @@ protected:
     void* socket;
   };
 
-  Entity receiver_;
-  Entity sender_[3];
-  //std::vector<Entity> senders_;
+  //Entity receiver_;
+  //Entity sender_[3];
+  std::vector<Entity> senders_;
+  std::vector<Entity> receivers_;
 
-  int rank_;
-  int size_;
-  std::vector<std::string> machine_lists_;
+  int sender_rank_;
+  int receiver_rank_;
+  int sender_size_;
+  int receiver_size_;
+  
   std::unordered_map<std::string, std::vector<std::string>> conf_table;
 };
 } 
